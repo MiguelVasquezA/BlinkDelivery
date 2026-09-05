@@ -28,17 +28,15 @@ Sistema de información para la gestión de domicilios que permite administrar c
 ```text
 docs/
 2
-├── 01_Planteamiento_Problema.pdf
+├── 01_Planteamiento_Problema.md
 3
-├── 02_Requisitos_Preguntas_Supuestos.pdf
+├── 02_Requisitos_Preguntas_Supuestos.md
 4
 ├── 03_Diagrama_EER.svg
 5
-├── 04_Esquema_Relacional.svg
+├── 04_Esquema_Relacional.md
 6
 ├── 05_Diccionario_Datos.xlsx
-7
-└── 06_Entrega1.pdf
 ```
 
 La carpeta `docs` contiene:
