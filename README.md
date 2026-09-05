@@ -46,7 +46,7 @@ La carpeta `docs` contiene:
 - Diagrama EER
 - Esquema relacional
 - Diccionario de datos inicial
-- Documento PDF de la entrega
+
 
 ## Entrega 1
 
