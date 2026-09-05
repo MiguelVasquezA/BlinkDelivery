@@ -4,7 +4,7 @@ erDiagram
 
 &#x20;   CLIENTE {
 
-&#x20;       int id\_cliente PK
+&#x20;       int id_cliente PK
 
 &#x20;       string nombre
 
