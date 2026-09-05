@@ -1,5 +1,3 @@
-```mermaid
-
 erDiagram
 
 &#x20;   CLIENTE {
