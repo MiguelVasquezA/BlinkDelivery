@@ -128,5 +128,5 @@ erDiagram
 
 &#x20;   PEDIDO ||--|{ DETALLE_PEDIDO : contiene
 
-&#x20;   PRODUCTO ||--o{ DETALLE\_PEDIDO : incluye
+&#x20;   PRODUCTO ||--o{ DETALLE_PEDIDO : incluye
 
