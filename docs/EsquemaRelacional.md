@@ -74,7 +74,8 @@ erDiagram
 
     domiciliario {
         integer id_domiciliario PK,FK "persona.id_persona - no se genera aparte - ON DELETE RESTRICT: quitar el rol debe ser explicito"
-        varchar estado "20, disponible o en entrega"
+        varchar vehiculo "20, moto, bicicleta o carro"
+        varchar estado "20, disponible, en entrega o inactivo"
         timestamp fecha_registro "no nulo - alta como domiciliario"
     }
 

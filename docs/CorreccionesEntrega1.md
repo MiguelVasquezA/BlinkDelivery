@@ -36,6 +36,7 @@ Se incorporó el supertipo **Persona**, con Cliente y Domiciliario como subtipos
 - Se eliminaron `nombre`, `apellido` y `telefono` de `cliente` y `domiciliario`.
 - Sus identificadores pasaron a `INTEGER` con llave `PK, FK` hacia `persona.id_persona`.
 - `telefono` admite nulos porque es opcional para el cliente. Para el domiciliario es obligatorio (RN26).
+- Se agregó `vehiculo` a `domiciliario` (`moto`, `bicicleta` o `carro`). Ya estaba en el diagrama EER, pero faltaba en el esquema relacional y en el diccionario.
 
 ### Requisitos y supuestos (`2.RequisitosySupuestos.md`)
 
