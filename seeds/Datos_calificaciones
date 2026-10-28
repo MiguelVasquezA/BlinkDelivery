@@ -1,0 +1,16 @@
+insert into calificacion (id_calificacion, id_pedido, id_cliente, id_restaurante, puntuacion,
+comentario, fecha) values
+(1, 1, 1, 1, 5, 'El pescado llegó caliente y bien servido', '2026-08-03 14:00'),
+(2, 2, 2, 3, 4, 'Buenas hamburguesas, las papas llegaron un poco frías', '2026-08-05 21:00'),
+(3, 3, 3, 5, 3, null, '2026-08-10 09:00'),
+(4, 4, 4, 2, 5, 'La picada alcanza para tres', '2026-08-14 15:30'),
+(5, 5, 1, 4, 4, null, '2026-08-20 18:00'),
+(6, 6, 5, 1, 4, 'Sancocho muy bueno, faltó ají', '2026-08-24 14:10'),
+(7, 8, 7, 5, 2, 'La pizza llegó fría y tarde', '2026-09-02 21:30'),
+(8, 9, 2, 1, 5, null, '2026-09-06 15:00'),
+(9, 10, 8, 2, 4, null, '2026-09-11 08:00'),
+(10, 11, 9, 3, 3, 'El perro caliente venía sin salsas', '2026-09-13 20:00'),
+(11, 13, 12, 1, 5, 'Como en casa', '2026-09-22 14:30'),
+(12, 14, 15, 3, 4, null, '2026-09-28 10:00'),
+(13, 17, 6, 4, 5, 'Las natas, excelentes', '2026-10-12 19:00'),
+(14, 19, 3, 2, 4, null, '2026-10-22 09:30');
