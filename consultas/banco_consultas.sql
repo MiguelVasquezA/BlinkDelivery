@@ -51,3 +51,14 @@ join restaurante r on r.id_restaurante = pr.id_restaurante
 left join detalle_pedido dp on dp.id_producto = pr.id_producto
 where dp.id_detalle_pedido is null
 order by r.nombre, pr.nombre;
+
+-- C07. ¿Qué restaurantes tienen más de 3 pedidos entregados, y cuánto han vendido?
+select r.nombre,
+       count(pe.id_pedido) as pedidos_entregados,
+       sum(pe.total) as ventas
+from restaurante r
+join pedido pe on pe.id_restaurante = r.id_restaurante
+where pe.estado = 'entregado'
+group by r.id_restaurante, r.nombre
+having count(pe.id_pedido) > 3
+order by ventas desc;
