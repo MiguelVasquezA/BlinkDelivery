@@ -141,3 +141,23 @@ ser un atributo simple en las correcciones.
   `id_cliente` e `id_restaurante`.
 - Verificación: los dos determinantes son claves candidatas. **BCNF.**
 - Observación: `id_cliente` e `id_restaurante` repiten datos de `pedido` (ver Datos derivados).
+
+
+## Excepción: pedido
+
+La DF `id_direccion → id_cliente` hace que `pedido` no esté en 3FN. Se decidió mantener
+`id_cliente` en `pedido` como excepción justificada:
+
+1. **El cliente es un hecho propio del pedido.** Es quien lo paga y quien puede calificarlo
+   (RN08, RN12). En el EER es una relación propia ("cliente realiza pedido"), distinta de
+   "dirección es destino de pedido".
+2. **La anomalía de actualización no ocurre.** Una dependencia transitiva es peligrosa cuando el
+   valor intermedio cambia. Aquí no: la dirección es entidad débil del cliente y su dueño nunca
+   cambia.
+3. **Es la consulta más frecuente.** Los pedidos de un cliente son su pantalla principal;
+   guardar `id_cliente` evita una reunión con `direccion` en todas esas consultas.
+4. **El riesgo que queda está controlado.** El único riesgo es insertar un pedido con la
+   dirección de otro cliente (anomalía de inserción). Los datos semilla lo cumplen y en la
+   Entrega 3 un trigger de validación lo impedirá (RN27).
+
+   
