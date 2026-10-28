@@ -66,3 +66,40 @@ ser un atributo simple en las correcciones.
 - 1FN: `direccion_texto` se trata como valor atómico, porque el sistema nunca consulta por calle
   o número por separado.
 - Verificación: **BCNF.**
+
+
+### restaurante
+
+- Claves candidatas: `id_restaurante`.
+- DF: `id_restaurante →` todas las demás columnas.
+- DF que no se cumplen:
+  - `nombre ↛ id_restaurante`: una cadena puede tener dos sedes con el mismo nombre.
+  - `direccion_texto ↛ ciudad`: igual que en `direccion`.
+- Verificación: dentro de la tabla, el único determinante es la clave. **BCNF.**
+- Observación: `calificacion_promedio` es un dato derivado de `calificacion` (ver Datos derivados).
+
+### categoria
+
+- Claves candidatas: `id_categoria` y `nombre` (`nombre_categoria_unico`).
+- DF: `id_categoria → nombre`; `nombre → id_categoria`.
+- Verificación: **BCNF.**
+
+### restaurante_categoria
+
+- Claves candidatas: `(id_restaurante, id_categoria)`.
+- DF: solo triviales.
+- DF que no se cumplen:
+  - `id_restaurante ↛ id_categoria`: La Brasa del Prado está en Asados y en Comida típica.
+  - `id_categoria ↛ id_restaurante`: Comida rápida tiene a Burger Norte y a Pizzería Bella Napoli.
+- 2FN: es la única tabla con clave compuesta, pero no tiene atributos no primos.
+- Verificación: **BCNF.** Además existe por la 1FN: guardar las categorías como lista dentro de
+  `restaurante` violaría la atomicidad.
+
+### producto
+
+- Claves candidatas: `id_producto`.
+- DF: `id_producto → id_restaurante, nombre, descripcion, precio, disponible`.
+- DF que no se cumplen: `nombre ↛ precio`: una "Gaseosa" puede costar distinto en cada restaurante.
+- Observación: si se declarara que un restaurante no repite nombres de producto,
+  `(id_restaurante, nombre)` sería otra clave candidata, y la tabla seguiría en BCNF.
+- Verificación: **BCNF.**
