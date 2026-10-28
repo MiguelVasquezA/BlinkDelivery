@@ -69,3 +69,27 @@ from pedido
 where estado = 'entregado'
   and total > (select avg(total) from pedido where estado = 'entregado')
 order by total desc;
+
+-- C09. ¿Cuánto ha gastado cada cliente en pedidos entregados, de mayor a menor?
+select p.nombre,
+       p.apellido,
+       count(pe.id_pedido) as pedidos,
+       sum(pe.total) as total_gastado
+from pedido pe
+join persona p on p.id_persona = pe.id_cliente
+where pe.estado = 'entregado'
+group by p.id_persona, p.nombre, p.apellido
+order by total_gastado desc;
+
+-- C10. ¿Qué calificaciones de 3 o menos estrellas se han recibido, de quién y para qué restaurante?
+select r.nombre as restaurante,
+       p.nombre,
+       p.apellido,
+       ca.puntuacion,
+       ca.comentario,
+       ca.fecha
+from calificacion ca
+join restaurante r on r.id_restaurante = ca.id_restaurante
+join persona p on p.id_persona = ca.id_cliente
+where ca.puntuacion <= 3
+order by ca.puntuacion, ca.fecha;
