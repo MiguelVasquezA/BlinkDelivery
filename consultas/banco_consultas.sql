@@ -8,3 +8,30 @@ select id_pedido, estado, restaurante, direccion_texto, ciudad
 from pedidos_en_curso
 where id_domiciliario is null
 order by fecha_pedido;
+
+-- C03. ¿Qué productos ha comprado Valentina Rojas, en qué restaurante y cuánto pagó por cada línea?
+select pe.id_pedido,
+       pe.fecha_pedido,
+       r.nombre as restaurante,
+       pr.nombre as producto,
+       dp.cantidad,
+       dp.precio_unitario,
+       dp.cantidad * dp.precio_unitario as subtotal
+from pedido pe
+join detalle_pedido dp on dp.id_pedido = pe.id_pedido
+join producto pr on pr.id_producto = dp.id_producto
+join restaurante r on r.id_restaurante = pe.id_restaurante
+where pe.id_cliente = 1
+order by pe.fecha_pedido, pr.nombre;
+
+-- C04. ¿Cuántas entregas ha completado cada domiciliario y con qué vehículo trabaja?
+select p.nombre,
+       p.apellido,
+       d.vehiculo,
+       count(pe.id_pedido) as entregas
+from domiciliario d
+join persona p on p.id_persona = d.id_domiciliario
+join pedido pe on pe.id_domiciliario = d.id_domiciliario
+where pe.estado = 'entregado'
+group by d.id_domiciliario, p.nombre, p.apellido, d.vehiculo
+order by entregas desc, p.apellido;
