@@ -103,3 +103,41 @@ ser un atributo simple en las correcciones.
 - Observación: si se declarara que un restaurante no repite nombres de producto,
   `(id_restaurante, nombre)` sería otra clave candidata, y la tabla seguiría en BCNF.
 - Verificación: **BCNF.**
+
+
+### detalle_pedido
+
+- Claves candidatas: `id_detalle_pedido`.
+- DF: `id_detalle_pedido → id_pedido, id_producto, cantidad, precio_unitario`.
+- DF que no se cumplen: `id_producto ↛ precio_unitario`.
+  Si `precio_unitario` fuera el precio actual del producto, se cumpliría
+  `id_producto → precio_unitario` y habría una dependencia transitiva
+  (`id_detalle_pedido → id_producto → precio_unitario`): la tabla no estaría en 3FN.
+  Pero es el precio en el momento de la compra, un **hecho histórico**: depende de la línea del
+  pedido, no del producto. En los datos, el producto 12 aparece a 20 000 en el pedido 2 y a
+  22 000 en los pedidos 11 y 18.
+- Verificación: **BCNF.** No es una excepción: es un hecho histórico deliberado.
+
+### pedido
+
+- Claves candidatas: `id_pedido`.
+- DF:
+  - `id_pedido →` todas las demás columnas.
+  - `id_direccion → id_cliente`: cada dirección pertenece a un solo cliente (RN02) y el pedido
+    se entrega en una dirección del mismo cliente que lo hace.
+- Verificación:
+  - 1FN y 2FN: se cumplen (clave de una sola columna).
+  - 3FN: **no se cumple.** `id_direccion` no es superclave de `pedido` (una dirección está en
+    varios pedidos) e `id_cliente` no es atributo primo. Es una dependencia transitiva:
+    `id_pedido → id_direccion → id_cliente`.
+  - BCNF: tampoco.
+- Conclusión: es la única tabla que no está en 3FN. Ver la sección Excepción: pedido.
+- Observación: `total` es un dato derivado del detalle (ver Datos derivados).
+
+### calificacion
+
+- Claves candidatas: `id_calificacion` e `id_pedido` (`calificacion_por_pedido_unica`).
+- DF: `id_calificacion →` todas las demás; `id_pedido →` todas las demás, incluidos
+  `id_cliente` e `id_restaurante`.
+- Verificación: los dos determinantes son claves candidatas. **BCNF.**
+- Observación: `id_cliente` e `id_restaurante` repiten datos de `pedido` (ver Datos derivados).
