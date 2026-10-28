@@ -65,3 +65,25 @@ Etiqueta de la entrega:
 ```text
 entrega-1
 ```
+
+## Migraciones
+
+La carpeta `migraciones/` contiene el esquema de la base de datos en scripts numerados.
+
+Para reconstruir la base de datos desde cero:
+
+1. Crear una base de datos vacía en PostgreSQL.
+2. Ejecutar los archivos en orden:
+   - `001_crear_personas_y_roles.sql`
+   - `002_crear_direcciones.sql`
+   - `003_crear_restaurantes_y_categorias.sql`
+   - `004_crear_productos.sql`
+   - `005_crear_pedidos.sql`
+   - `006_crear_calificaciones.sql`
+
+Los scripts deben ejecutarse en orden, porque algunas tablas
+dependen de otras mediante claves foráneas.
+
+La carpeta `docs/` contiene la documentación del proyecto,
+incluido `ReglasPendientes.md`, que registra las reglas de negocio
+que se abordarán en la Entrega 3.
