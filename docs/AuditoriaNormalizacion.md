@@ -161,3 +161,46 @@ La DF `id_direccion → id_cliente` hace que `pedido` no esté en 3FN. Se decidi
    Entrega 3 un trigger de validación lo impedirá (RN27).
 
    
+## Datos derivados
+
+### pedido.total
+
+- Se deriva de: la suma de `cantidad × precio_unitario` del detalle.
+  Pedido 1: 2 × 32 000 + 2 × 5 000 = 74 000.
+- Por qué se guarda: es el valor cobrado al cliente; aparece en casi todas las consultas de
+  ventas, y tenerlo guardado evita reunir con el detalle y el riesgo de totales inflados.
+- Riesgo: que no coincida con la suma del detalle.
+- Control: los datos semilla se verificaron; en la Entrega 3 se calculará con una función o
+  trigger.
+
+### restaurante.calificacion_promedio
+
+- Se deriva de: el promedio de `puntuacion` de sus calificaciones.
+  Sazón Costeño: (5 + 4 + 5 + 5) / 4 = 4.75.
+- Por qué se guarda: se muestra en cada búsqueda de restaurantes y se usa para ordenarlos.
+- Riesgo: que no coincida con las calificaciones.
+- Control: los datos semilla se verificaron; en la Entrega 3 un trigger lo recalculará.
+
+### calificacion.id_cliente y calificacion.id_restaurante
+
+- Se derivan de: `pedido`, a través de `id_pedido`.
+- Por qué se guardan: en el EER son relaciones propias ("cliente emite", "restaurante recibe") y
+  permiten consultar las calificaciones de un restaurante sin pasar por `pedido`.
+- Riesgo: que no coincidan con los del pedido (violaría RN12).
+- Control: los datos semilla lo cumplen; en la Entrega 3 lo validará el trigger de la RN12.
+
+## Resumen
+
+| Tabla | Claves candidatas | DF no triviales | Forma normal | Observación |
+|---|---|---|---|---|
+| persona | id_persona | id_persona → resto | BCNF | Resultado de la corrección de la Entrega 1 |
+| cliente | id_cliente, correo | id_cliente → resto; correo → resto | BCNF | Dos claves candidatas |
+| domiciliario | id_domiciliario | id_domiciliario → resto | BCNF | |
+| direccion | id_direccion | id_direccion → resto | BCNF | direccion_texto atómico |
+| restaurante | id_restaurante | id_restaurante → resto | BCNF | calificacion_promedio derivado |
+| categoria | id_categoria, nombre | id_categoria ↔ nombre | BCNF | |
+| restaurante_categoria | (id_restaurante, id_categoria) | solo triviales | BCNF | Existe por la 1FN |
+| producto | id_producto | id_producto → resto | BCNF | |
+| detalle_pedido | id_detalle_pedido | id_detalle_pedido → resto | BCNF | precio_unitario es hecho histórico |
+| pedido | id_pedido | id_pedido → resto; id_direccion → id_cliente | 2FN | Excepción justificada; total derivado |
+| calificacion | id_calificacion, id_pedido | id_calificacion → resto; id_pedido → resto | BCNF | ids repetidos de pedido |
