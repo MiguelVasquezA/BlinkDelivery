@@ -62,3 +62,10 @@ where pe.estado = 'entregado'
 group by r.id_restaurante, r.nombre
 having count(pe.id_pedido) > 3
 order by ventas desc;
+
+-- C08. ¿Qué pedidos entregados superan el valor promedio de los pedidos entregados?
+select id_pedido, fecha_pedido, total
+from pedido
+where estado = 'entregado'
+  and total > (select avg(total) from pedido where estado = 'entregado')
+order by total desc;
