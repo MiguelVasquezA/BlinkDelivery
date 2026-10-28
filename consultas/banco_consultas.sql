@@ -35,3 +35,19 @@ join pedido pe on pe.id_domiciliario = d.id_domiciliario
 where pe.estado = 'entregado'
 group by d.id_domiciliario, p.nombre, p.apellido, d.vehiculo
 order by entregas desc, p.apellido;
+
+-- C05. ¿Qué clientes registrados nunca han hecho un pedido?
+select p.nombre, p.apellido, c.correo, c.fecha_registro
+from cliente c
+join persona p on p.id_persona = c.id_cliente
+left join pedido pe on pe.id_cliente = c.id_cliente
+where pe.id_pedido is null
+order by c.fecha_registro;
+
+-- C06. ¿Qué productos no se han vendido nunca, y de qué restaurante son?
+select r.nombre as restaurante, pr.nombre as producto, pr.precio, pr.disponible
+from producto pr
+join restaurante r on r.id_restaurante = pr.id_restaurante
+left join detalle_pedido dp on dp.id_producto = pr.id_producto
+where dp.id_detalle_pedido is null
+order by r.nombre, pr.nombre;
