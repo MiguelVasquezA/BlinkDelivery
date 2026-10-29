@@ -1,95 +1,57 @@
--- C01. ¿Qué pedidos están en curso en este momento, del más antiguo al más reciente?
-select *
-from pedidos_en_curso
-order by fecha_pedido;
-
--- C02. ¿Qué pedidos en curso todavía no tienen domiciliario asignado?
-select id_pedido, estado, restaurante, direccion_texto, ciudad
-from pedidos_en_curso
-where id_domiciliario is null
-order by fecha_pedido;
-
--- C03. ¿Qué productos ha comprado Valentina Rojas, en qué restaurante y cuánto pagó por cada línea?
-select pe.id_pedido,
-       pe.fecha_pedido,
-       r.nombre as restaurante,
-       pr.nombre as producto,
-       dp.cantidad,
-       dp.precio_unitario,
-       dp.cantidad * dp.precio_unitario as subtotal
-from pedido pe
-join detalle_pedido dp on dp.id_pedido = pe.id_pedido
-join producto pr on pr.id_producto = dp.id_producto
-join restaurante r on r.id_restaurante = pe.id_restaurante
-where pe.id_cliente = 1
-order by pe.fecha_pedido, pr.nombre;
-
--- C04. ¿Cuántas entregas ha completado cada domiciliario y con qué vehículo trabaja?
-select p.nombre,
-       p.apellido,
-       d.vehiculo,
-       count(pe.id_pedido) as entregas
-from domiciliario d
-join persona p on p.id_persona = d.id_domiciliario
-join pedido pe on pe.id_domiciliario = d.id_domiciliario
-where pe.estado = 'entregado'
-group by d.id_domiciliario, p.nombre, p.apellido, d.vehiculo
-order by entregas desc, p.apellido;
-
--- C05. ¿Qué clientes registrados nunca han hecho un pedido?
-select p.nombre, p.apellido, c.correo, c.fecha_registro
-from cliente c
-join persona p on p.id_persona = c.id_cliente
-left join pedido pe on pe.id_cliente = c.id_cliente
-where pe.id_pedido is null
-order by c.fecha_registro;
-
--- C06. ¿Qué productos no se han vendido nunca, y de qué restaurante son?
-select r.nombre as restaurante, pr.nombre as producto, pr.precio, pr.disponible
-from producto pr
-join restaurante r on r.id_restaurante = pr.id_restaurante
-left join detalle_pedido dp on dp.id_producto = pr.id_producto
-where dp.id_detalle_pedido is null
-order by r.nombre, pr.nombre;
-
--- C07. ¿Qué restaurantes tienen más de 3 pedidos entregados, y cuánto han vendido?
-select r.nombre,
-       count(pe.id_pedido) as pedidos_entregados,
-       sum(pe.total) as ventas
-from restaurante r
-join pedido pe on pe.id_restaurante = r.id_restaurante
-where pe.estado = 'entregado'
-group by r.id_restaurante, r.nombre
-having count(pe.id_pedido) > 3
-order by ventas desc;
-
--- C08. ¿Qué pedidos entregados superan el valor promedio de los pedidos entregados?
-select id_pedido, fecha_pedido, total
+-- C01. ¿Qué pedidos se han entregado, del más antiguo al más reciente?
+select id_pedido, id_cliente, id_restaurante, fecha_pedido, total
 from pedido
 where estado = 'entregado'
-  and total > (select avg(total) from pedido where estado = 'entregado')
-order by total desc;
+order by fecha_pedido asc;
 
--- C09. ¿Cuánto ha gastado cada cliente en pedidos entregados, de mayor a menor?
-select p.nombre,
-       p.apellido,
-       count(pe.id_pedido) as pedidos,
-       sum(pe.total) as total_gastado
-from pedido pe
-join persona p on p.id_persona = pe.id_cliente
-where pe.estado = 'entregado'
-group by p.id_persona, p.nombre, p.apellido
-order by total_gastado desc;
+-- C02. ¿Qué pedidos fueron cancelados?
+select id_pedido, id_cliente, id_restaurante, fecha_pedido, total, notas
+from pedido
+where estado = 'cancelado'
+order by fecha_pedido asc;
 
--- C10. ¿Qué calificaciones de 3 o menos estrellas se han recibido, de quién y para qué restaurante?
-select r.nombre as restaurante,
-       p.nombre,
-       p.apellido,
-       ca.puntuacion,
-       ca.comentario,
-       ca.fecha
-from calificacion ca
-join restaurante r on r.id_restaurante = ca.id_restaurante
-join persona p on p.id_persona = ca.id_cliente
-where ca.puntuacion <= 3
-order by ca.puntuacion, ca.fecha;
+-- C03. ¿Qué pedidos ha hecho Valentina Rojas (cliente 1), del más antiguo al más reciente?
+select id_pedido, id_restaurante, estado, fecha_pedido, total
+from pedido
+where id_cliente = 1
+order by fecha_pedido asc;
+
+-- C04. ¿Qué productos ofrece Sazón Costeño (restaurante 1), del más barato al más caro?
+select nombre, descripcion, precio, disponible
+from producto
+where id_restaurante = 1
+order by precio asc;
+
+-- C05. ¿Qué productos no están disponibles para la venta?
+select id_restaurante, nombre, precio
+from producto
+where disponible = false
+order by id_restaurante asc;
+
+-- C06. ¿Qué restaurantes están abiertos y cuál es su calificación promedio?
+select nombre, ciudad, calificacion_promedio
+from restaurante
+where estado = 'abierto'
+order by calificacion_promedio asc;
+
+-- C07. ¿Cuánto se ha vendido en total en pedidos entregados?
+select sum(total)
+from pedido
+where estado = 'entregado';
+
+-- C08. ¿Cuántas unidades se han vendido del arroz con coco y pescado frito (producto 1)?
+select sum(cantidad)
+from detalle_pedido
+where id_producto = 1;
+
+-- C09. ¿Qué calificaciones de 3 o menos estrellas se han recibido?
+select id_pedido, id_restaurante, puntuacion, comentario, fecha
+from calificacion
+where puntuacion <= 3
+order by puntuacion asc;
+
+-- C10. ¿Qué domiciliarios están disponibles y en qué vehículo trabajan?
+select id_domiciliario, vehiculo, fecha_registro
+from domiciliario
+where estado = 'disponible'
+order by vehiculo asc;

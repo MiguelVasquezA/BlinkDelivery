@@ -66,7 +66,6 @@ migraciones/
 ├── 004_crear_productos.sql
 ├── 005_crear_pedidos.sql
 ├── 006_crear_calificaciones.sql
-├── 007_crear_vista_pedidos_en_curso.sql
 └── 008_crear_indices.sql
 seeds/
 ├── Datos_Personas_Roles.sql
@@ -196,7 +195,6 @@ La carpeta `migraciones/` contiene el esquema de la base de datos en scripts num
 | `004_crear_productos.sql` | Tabla `producto` |
 | `005_crear_pedidos.sql` | Tablas `pedido` y `detalle_pedido` |
 | `006_crear_calificaciones.sql` | Tabla `calificacion` |
-| `007_crear_vista_pedidos_en_curso.sql` | Vista `pedidos_en_curso` |
 | `008_crear_indices.sql` | Índice `idx_pedido_cliente` |
 
 Los scripts deben ejecutarse en orden, porque algunas tablas dependen de otras mediante claves
@@ -214,11 +212,6 @@ migraciones y en este orden:
 5. `Datos_pedidos.sql`: pedidos y su detalle.
 6. `Datos_calificaciones.sql`: calificaciones de los pedidos.
 
-### Vista
-
-`pedidos_en_curso` muestra los pedidos que no están entregados ni cancelados, con el cliente,
-el restaurante, la dirección de entrega, el domiciliario asignado y el total.
-
 ### Banco de consultas
 
 `consultas/banco_consultas.sql` contiene las consultas de negocio, cada una con la pregunta
@@ -226,16 +219,16 @@ que responde:
 
 | Consulta | Pregunta |
 |---|---|
-| C01 | ¿Qué pedidos están en curso en este momento, del más antiguo al más reciente? |
-| C02 | ¿Qué pedidos en curso todavía no tienen domiciliario asignado? |
-| C03 | ¿Qué productos ha comprado Valentina Rojas, en qué restaurante y cuánto pagó por cada línea? |
-| C04 | ¿Cuántas entregas ha completado cada domiciliario y con qué vehículo trabaja? |
-| C05 | ¿Qué clientes registrados nunca han hecho un pedido? |
-| C06 | ¿Qué productos no se han vendido nunca, y de qué restaurante son? |
-| C07 | ¿Qué restaurantes tienen más de 3 pedidos entregados, y cuánto han vendido? |
-| C08 | ¿Qué pedidos entregados superan el valor promedio de los pedidos entregados? |
-| C09 | ¿Cuánto ha gastado cada cliente en pedidos entregados, de mayor a menor? |
-| C10 | ¿Qué calificaciones de 3 o menos estrellas se han recibido, de quién y para qué restaurante? |
+| C01 | ¿Qué pedidos se han entregado, del más antiguo al más reciente? |
+| C02 | ¿Qué pedidos fueron cancelados? |
+| C03 | ¿Qué pedidos ha hecho Valentina Rojas, del más antiguo al más reciente? |
+| C04 | ¿Qué productos ofrece Sazón Costeño, del más barato al más caro? |
+| C05 | ¿Qué productos no están disponibles para la venta? |
+| C06 | ¿Qué restaurantes están abiertos y cuál es su calificación promedio? |
+| C07 | ¿Cuánto se ha vendido en total en pedidos entregados? |
+| C08 | ¿Cuántas unidades se han vendido del arroz con coco y pescado frito? |
+| C09 | ¿Qué calificaciones de 3 o menos estrellas se han recibido? |
+| C10 | ¿Qué domiciliarios están disponibles y en qué vehículo trabajan? |
 
 Se ejecutan después de las migraciones (001 a 008) y de los datos semilla. Cada consulta se
 ejecuta por separado.
@@ -274,7 +267,7 @@ claves repetidas y hay que recrear la base.
 - Migraciones del esquema
 - Datos semilla
 - Auditoría de normalización
-- Banco de consultas y vista de pedidos en curso
+- Banco de consultas
 - Índices y datos de volumen para medirlos
 - Diccionario de datos actualizado
 
