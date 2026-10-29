@@ -1,4 +1,4 @@
 package com.blinkdelivery.dao;
 
-public class OrderFileDao {
+public class OrderFileDao   {
 }

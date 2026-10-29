@@ -1,4 +1,4 @@
 package com.blinkdelivery.modelo;
 
-public class Pedido {
+public class Order {
 }

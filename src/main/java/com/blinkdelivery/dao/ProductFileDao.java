@@ -1,4 +1,4 @@
 package com.blinkdelivery.dao;
 
-public class ProductoDAO {
+public class ProductFileDao {
 }
