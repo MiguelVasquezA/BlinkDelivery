@@ -1,4 +1,4 @@
 package com.blinkdelivery.presentacion;
 
-public class MenuRestaurante {
+public class ConsoleUI {
 }

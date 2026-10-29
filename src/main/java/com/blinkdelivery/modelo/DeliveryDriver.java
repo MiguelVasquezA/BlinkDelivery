@@ -1,4 +1,4 @@
 package com.blinkdelivery.modelo;
 
-public class RestaurantStatus {
+public class DeliveryDriver {
 }
