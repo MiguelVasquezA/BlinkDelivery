@@ -1,0 +1,1 @@
+CREATE INDEX idx_pedido_cliente ON pedido(id_cliente);
