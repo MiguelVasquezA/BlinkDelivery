@@ -11,7 +11,7 @@ CREATE TABLE cliente(
 	correo VARCHAR(120) NOT NULL
 		CONSTRAINT correo_cliente_unico UNIQUE,
 	contrasena_hash VARCHAR(255) NOT NULL,
-	fecha_registro TIMESTAMP NOT NULL
+	fecha_registro DATE NOT NULL
 );
 
 CREATE TABLE domiciliario(
@@ -31,5 +31,5 @@ CREATE TABLE domiciliario(
 			OR estado = 'en entrega'
 			OR estado = 'inactivo'
 		),
-	fecha_registro TIMESTAMP NOT NULL
+	fecha_registro DATE NOT NULL
 );

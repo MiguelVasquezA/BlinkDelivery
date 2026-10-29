@@ -1,7 +1,7 @@
 CREATE TABLE restaurante (
     id_restaurante INTEGER PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
-    descripcion TEXT,
+    descripcion VARCHAR(200),
     telefono VARCHAR(20),
     direccion_texto VARCHAR(200) NOT NULL,
     ciudad VARCHAR(60) NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE restaurante (
             calificacion_promedio >= 1
             AND calificacion_promedio <= 5
         ),
-    fecha_registro TIMESTAMP NOT NULL
+    fecha_registro DATE NOT NULL
 );
 
 CREATE TABLE categoria (

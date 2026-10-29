@@ -19,10 +19,10 @@ CREATE TABLE pedido (
             OR estado = 'entregado'
             OR estado = 'cancelado'
         ),
-    fecha_pedido TIMESTAMP NOT NULL,
+    fecha_pedido DATE NOT NULL,
     total NUMERIC(10,2) NOT NULL
         CONSTRAINT total_no_negativo CHECK (total >= 0),
-    notas TEXT
+    notas VARCHAR(200)
 );
 
 CREATE TABLE detalle_pedido (
