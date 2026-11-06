@@ -1,4 +1,4 @@
-package com.blinkdelivery.negocio;
+package com.blinkdelivery.service;
 
 import com.blinkdelivery.dao.ProductFileDao;
 import com.blinkdelivery.dao.RestaurantFileDao;

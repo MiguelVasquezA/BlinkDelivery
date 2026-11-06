@@ -5,10 +5,10 @@ import com.blinkdelivery.modelo.DeliveryDriver;
 import com.blinkdelivery.modelo.Order;
 import com.blinkdelivery.modelo.Product;
 import com.blinkdelivery.modelo.Restaurant;
-import com.blinkdelivery.negocio.CustomerService;
-import com.blinkdelivery.negocio.DeliveryDriverService;
-import com.blinkdelivery.negocio.OrderService;
-import com.blinkdelivery.negocio.RestaurantService;
+import com.blinkdelivery.service.CustomerService;
+import com.blinkdelivery.service.DeliveryDriverService;
+import com.blinkdelivery.service.OrderService;
+import com.blinkdelivery.service.RestaurantService;
 
 import java.io.IOException;
 import java.util.List;

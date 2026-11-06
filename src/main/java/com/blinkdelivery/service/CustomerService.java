@@ -1,4 +1,4 @@
-package com.blinkdelivery.negocio;
+package com.blinkdelivery.service;
 
 import com.blinkdelivery.dao.CustomerFileDao;
 import com.blinkdelivery.modelo.Customer;
