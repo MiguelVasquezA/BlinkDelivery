@@ -1,0 +1,2 @@
+1111;111;crazy roll skin;sushi con borde tempura, queso crema, salsas de la casa, con un toping de camarones;28000.0;true
+2222;111;bombastic;rollo tempura, con un toping de camarones tempura, queso crema, aguacate, arroz;30000.0;true
