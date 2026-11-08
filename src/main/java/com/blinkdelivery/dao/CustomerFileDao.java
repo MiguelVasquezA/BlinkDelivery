@@ -22,7 +22,7 @@ public class CustomerFileDao {
      */
     public void guardar(Customer customer) throws IOException {
         List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(customer.toString());
+        lineas.add(customer.toRegistro());
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
 
@@ -69,7 +69,7 @@ public class CustomerFileDao {
     public void actualizar(Customer customer) throws IOException {
         List<String> lineas = new ArrayList<>();
         for (Customer c : listar()) {
-            lineas.add(c.getIdentification().equalsIgnoreCase(customer.getIdentification()) ? customer.toString() : c.toString());
+            lineas.add(c.getIdentification().equalsIgnoreCase(customer.getIdentification()) ? customer.toRegistro() : c.toRegistro());
         }
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }

@@ -22,7 +22,7 @@ public class ProductFileDao {
      */
     public void guardar(Product product) throws IOException {
         List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(product.toString());
+        lineas.add(product.toRegistro());
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
 
@@ -71,7 +71,7 @@ public class ProductFileDao {
     public void actualizar(Product product) throws IOException {
         List<String> lineas = new ArrayList<>();
         for (Product p : listar()) {
-            lineas.add(p.getId().equalsIgnoreCase(product.getId()) ? product.toString() : p.toString());
+            lineas.add(p.getId().equalsIgnoreCase(product.getId()) ? product.toRegistro() : p.toRegistro());
         }
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
