@@ -1,6 +1,7 @@
 package com.blinkdelivery.dao;
 
 import com.blinkdelivery.modelo.DeliveryDriver;
+import com.blinkdelivery.modelo.DriverStatus;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,7 @@ public class DriverFileDao {
      */
     public void guardar(DeliveryDriver driver) throws IOException {
         List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(driver.toString());
+        lineas.add(driver.toRegistro());
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
 
@@ -39,7 +40,7 @@ public class DriverFileDao {
             String[] partes = linea.split(";");
             if (partes.length == 5) {
                 DeliveryDriver d = new DeliveryDriver(partes[0], partes[1], partes[2], partes[3]);
-                d.setAvailable(Boolean.parseBoolean(partes[4]));
+                d.setEstado(DriverStatus.desdeTexto(partes[4]));
                 drivers.add(d);
             }
         }
@@ -71,7 +72,7 @@ public class DriverFileDao {
     public void actualizar(DeliveryDriver driver) throws IOException {
         List<String> lineas = new ArrayList<>();
         for (DeliveryDriver d : listar()) {
-            lineas.add(d.getIdentification().equalsIgnoreCase(driver.getIdentification()) ? driver.toString() : d.toString());
+            lineas.add(d.getIdentification().equalsIgnoreCase(driver.getIdentification()) ? driver.toRegistro() : d.toRegistro());
         }
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
