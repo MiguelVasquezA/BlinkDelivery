@@ -1,114 +1,151 @@
 package com.blinkdelivery.service;
 
-import com.blinkdelivery.dao.CustomerFileDao;
 import com.blinkdelivery.dao.DriverFileDao;
 import com.blinkdelivery.dao.OrderFileDao;
-import com.blinkdelivery.dao.ProductFileDao;
-import com.blinkdelivery.dao.RestaurantFileDao;
+import com.blinkdelivery.dao.OrderStatusHistoryFileDao;
+import com.blinkdelivery.modelo.Address;
 import com.blinkdelivery.modelo.Customer;
 import com.blinkdelivery.modelo.DeliveryDriver;
 import com.blinkdelivery.modelo.DriverStatus;
 import com.blinkdelivery.modelo.Order;
 import com.blinkdelivery.modelo.OrderItem;
 import com.blinkdelivery.modelo.OrderStatus;
+import com.blinkdelivery.modelo.OrderStatusChange;
 import com.blinkdelivery.modelo.Product;
 import com.blinkdelivery.modelo.Restaurant;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Servicio de negocio para la gestión de pedidos.
  * <p>
- * Coordina la creación del pedido, la validación de su ciclo de estados,
- * la asignación de domiciliarios y el cálculo de la comisión de la plataforma.
+ * Reglas que aplica:
  * </p>
+ * <ul>
+ *   <li>SP01 / RN07 / RN08: el pedido pertenece a un único cliente registrado.</li>
+ *   <li>SP04: el pedido tiene al menos un producto.</li>
+ *   <li>RN09: todos los productos son del mismo restaurante, que debe estar abierto (RN15)
+ *       y los productos disponibles (RN16).</li>
+ *   <li>RN17 / RN27 / SP05: la dirección de entrega está registrada por el mismo cliente.</li>
+ *   <li>RN18: cada cambio de estado del ciclo de vida queda registrado en el historial.</li>
+ *   <li>RN10 / RN11: como máximo un domiciliario por pedido, que debe estar disponible.</li>
+ *   <li>RN20: la plataforma cobra el 10 % de comisión sobre cada pedido entregado.</li>
+ * </ul>
  */
 public class OrderService {
+
+    /** Prefijo de los identificadores de pedido. */
+    private static final String PREFIJO_ID = "PED-";
 
     /** DAO que guarda y lee los pedidos en el archivo de texto. */
     private final OrderFileDao orderDao = new OrderFileDao();
 
-    /** DAO usado para verificar la existencia del cliente. */
-    private final CustomerFileDao customerDao = new CustomerFileDao();
+    /** DAO del historial de estados de los pedidos. */
+    private final OrderStatusHistoryFileDao historialDao = new OrderStatusHistoryFileDao();
 
-    /** DAO usado para verificar la existencia y el estado del restaurante. */
-    private final RestaurantFileDao restaurantDao = new RestaurantFileDao();
-
-    /** DAO usado para verificar la existencia y disponibilidad del producto. */
-    private final ProductFileDao productDao = new ProductFileDao();
-
-    /** DAO usado para consultar y actualizar a los domiciliarios. */
+    /** DAO usado para actualizar el estado de los domiciliarios. */
     private final DriverFileDao driverDao = new DriverFileDao();
 
+    private final CustomerService customerService = new CustomerService();
+    private final RestaurantService restaurantService = new RestaurantService();
+    private final ProductService productService = new ProductService();
+    private final DeliveryDriverService driverService = new DeliveryDriverService();
+
+    // ---------------------------------------------------------------- Creación
+
     /**
-     * Crea un pedido nuevo en estado {@link OrderStatus#RECIBIDO} y sin domiciliario asignado.
-     * <p>
-     * Verifica que el cliente, el restaurante y el producto existan, que el
-     * restaurante esté abierto y que el producto pertenezca a ese restaurante
-     * y esté disponible. El pedido se entrega en la dirección principal del
-     * cliente y congela el precio vigente del producto.
-     * </p>
+     * Crea un pedido de un solo producto, entregado en la dirección principal del cliente.
      *
      * @param idCliente     identificación del cliente que hace el pedido
      * @param idRestaurante identificador del restaurante
      * @param idProducto    identificador del producto pedido
      * @param cantidad      unidades del producto (mayor que cero)
-     * @return el pedido creado
+     * @return el pedido creado, en estado {@link OrderStatus#RECIBIDO}
      * @throws IOException              si ocurre un error al leer o escribir el archivo
      * @throws IllegalArgumentException si algún dato es inválido o no existe el cliente, restaurante o producto
      * @throws IllegalStateException    si el restaurante está cerrado o el producto no está disponible
      *                                  ni pertenece al restaurante
+     * @see #crearPedido(String, String, String, Map)
      */
     public Order crearPedido(String idCliente, String idRestaurante,
                              String idProducto, int cantidad) throws IOException {
-        idCliente = texto(idCliente, "El id del cliente");
-        idRestaurante = texto(idRestaurante, "El id del restaurante");
-        idProducto = texto(idProducto, "El id del producto");
-        if (cantidad <= 0) {
-            throw new IllegalArgumentException("La cantidad debe ser mayor que cero.");
-        }
-
-        Customer cliente = buscarCliente(idCliente);
-        if (cliente == null) {
-            throw new IllegalArgumentException("No existe un cliente con la identificación " + idCliente + ".");
-        }
-
-        Restaurant restaurante = buscarRestaurante(idRestaurante);
-        if (restaurante == null) {
-            throw new IllegalArgumentException("No existe un restaurante con el id " + idRestaurante + ".");
-        }
-        if (!restaurante.isOpen()) {
-            throw new IllegalStateException("El restaurante '" + restaurante.getName() + "' está cerrado.");
-        }
-
-        Product producto = buscarProducto(idProducto);
-        if (producto == null) {
-            throw new IllegalArgumentException("No existe un producto con el id " + idProducto + ".");
-        }
-        if (!producto.getRestaurantId().equals(restaurante.getId())) {
-            throw new IllegalStateException("El producto no pertenece al restaurante seleccionado.");
-        }
-        if (!producto.isAvailable()) {
-            throw new IllegalStateException("El producto '" + producto.getName() + "' no está disponible.");
-        }
-
-        String idPedido = "PED-" + String.format("%04d", orderDao.listar().size() + 1);
-
-        List<OrderItem> items = new ArrayList<>();
-        items.add(new OrderItem(producto, cantidad));
-        Order pedido = new Order(idPedido, cliente, restaurante, cliente.getDireccionPrincipal(), items);
-        orderDao.guardar(pedido);
-        return pedido;
+        Map<String, Integer> productos = new LinkedHashMap<>();
+        productos.put(ServiceValidations.texto(idProducto, "El id del producto"), cantidad);
+        return crearPedido(idCliente, idRestaurante, null, productos);
     }
 
     /**
-     * Cambia el estado de un pedido validando que la transición esté permitida.
+     * Crea un pedido con uno o varios productos de un mismo restaurante.
      * <p>
-     * Las transiciones válidas las define {@link OrderStatus#puedeCambiarA(OrderStatus)}
-     * y las aplica {@link Order#cambiarEstado(OrderStatus)}. Para pasar a
-     * {@link OrderStatus#EN_CAMINO} el pedido debe tener domiciliario asignado.
-     * Al pasar a un estado final se libera al domiciliario.
+     * El pedido queda en estado {@link OrderStatus#RECIBIDO}, sin domiciliario y con
+     * la comisión del 10 % (RN20). Cada línea congela el precio vigente del producto.
+     * Si un producto aparece repetido, sus cantidades se suman.
+     * </p>
+     *
+     * @param idCliente     identificación del cliente (debe estar registrado, SP01)
+     * @param idRestaurante restaurante al que se hace el pedido
+     * @param idDireccion   dirección de entrega registrada por el cliente; si es
+     *                      {@code null} o vacía se usa su dirección principal
+     * @param productos     mapa id de producto → cantidad (al menos un producto)
+     * @return el pedido creado
+     * @throws IOException              si ocurre un error al leer o escribir el archivo
+     * @throws IllegalArgumentException si algún dato es inválido, no existe alguna entidad
+     *                                  o la dirección no pertenece al cliente (RN27)
+     * @throws IllegalStateException    si el restaurante está cerrado, algún producto no está
+     *                                  disponible o es de otro restaurante (RN09)
+     */
+    public Order crearPedido(String idCliente, String idRestaurante, String idDireccion,
+                             Map<String, Integer> productos) throws IOException {
+        Customer cliente = customerService.obtenerPorId(ServiceValidations.texto(idCliente, "El id del cliente"));
+        Restaurant restaurante = restaurantService.obtenerPorId(
+                ServiceValidations.texto(idRestaurante, "El id del restaurante"));
+        if (!restaurante.estaAbierto()) {
+            throw new IllegalStateException("El restaurante '" + restaurante.getNombre() + "' está cerrado.");
+        }
+
+        Address direccion = resolverDireccion(cliente, idDireccion);
+
+        if (productos == null || productos.isEmpty()) {
+            throw new IllegalArgumentException("El pedido debe tener al menos un producto (SP04).");
+        }
+        Map<String, Integer> cantidades = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> e : productos.entrySet()) {
+            String idProducto = ServiceValidations.texto(e.getKey(), "El id del producto");
+            Integer cantidad = e.getValue();
+            if (cantidad == null || cantidad <= 0) {
+                throw new IllegalArgumentException("La cantidad del producto " + idProducto + " debe ser mayor que cero.");
+            }
+            cantidades.merge(idProducto, cantidad, Integer::sum);
+        }
+
+        List<OrderItem> items = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : cantidades.entrySet()) {
+            Product producto = productService.obtenerDeRestaurante(e.getKey(), restaurante.getId());
+            if (!producto.isDisponible()) {
+                throw new IllegalStateException("El producto '" + producto.getNombre() + "' no está disponible.");
+            }
+            items.add(new OrderItem(producto, e.getValue()));
+        }
+
+        Order pedido = new Order(siguienteId(), cliente, restaurante, direccion, items);
+        orderDao.guardar(pedido);
+        registrarHistorial(pedido);
+        return pedido;
+    }
+
+    // ---------------------------------------------------------------- Ciclo de vida
+
+    /**
+     * Cambia el estado de un pedido validando que la transición esté permitida
+     * y lo registra en el historial (RN18).
+     * <p>
+     * Las transiciones válidas las define {@link OrderStatus#puedeCambiarA(OrderStatus)}.
+     * Para pasar a {@link OrderStatus#EN_CAMINO} el pedido debe tener domiciliario.
+     * Al llegar a un estado final se libera al domiciliario.
      * </p>
      *
      * @param idPedido    identificador del pedido
@@ -119,9 +156,27 @@ public class OrderService {
      * @throws IllegalStateException    si la transición no está permitida o falta el domiciliario
      */
     public Order cambiarEstado(String idPedido, String nuevoEstado) throws IOException {
+        return cambiarEstado(idPedido, OrderStatus.desdeTexto(nuevoEstado));
+    }
+
+    /**
+     * Variante tipada de {@link #cambiarEstado(String, String)}.
+     *
+     * @param idPedido    identificador del pedido
+     * @param nuevoEstado estado destino
+     * @return el pedido con el estado actualizado
+     * @throws IOException              si ocurre un error al leer o escribir el archivo
+     * @throws IllegalArgumentException si el pedido no existe o el estado es nulo
+     * @throws IllegalStateException    si la transición no está permitida o falta el domiciliario
+     */
+    public Order cambiarEstado(String idPedido, OrderStatus nuevoEstado) throws IOException {
+        if (nuevoEstado == null) {
+            throw new IllegalArgumentException("El nuevo estado no puede ser nulo.");
+        }
         Order pedido = obtenerPorId(idPedido);
-        pedido.cambiarEstado(OrderStatus.desdeTexto(nuevoEstado));
+        pedido.cambiarEstado(nuevoEstado);
         orderDao.actualizar(pedido);
+        registrarHistorial(pedido);
 
         if (pedido.getEstado().esFinal()) {
             liberarDomiciliario(pedido);
@@ -130,8 +185,48 @@ public class OrderService {
     }
 
     /**
-     * Asigna un domiciliario a un pedido que está listo para recoger.
-     * El domiciliario queda no disponible mientras atiende el pedido.
+     * Cancela un pedido que aún no ha salido a entrega.
+     *
+     * @param idPedido identificador del pedido
+     * @return el pedido cancelado
+     * @throws IOException              si ocurre un error al leer o escribir el archivo
+     * @throws IllegalArgumentException si el pedido no existe
+     * @throws IllegalStateException    si ya está en camino o finalizado
+     */
+    public Order cancelarPedido(String idPedido) throws IOException {
+        return cambiarEstado(idPedido, OrderStatus.CANCELADO);
+    }
+
+    /**
+     * Consulta el estado actual de un pedido (RF09).
+     *
+     * @param idPedido identificador del pedido
+     * @return estado actual
+     * @throws IOException              si ocurre un error al leer el archivo
+     * @throws IllegalArgumentException si el pedido no existe
+     */
+    public OrderStatus consultarEstado(String idPedido) throws IOException {
+        return obtenerPorId(idPedido).getEstado();
+    }
+
+    /**
+     * Lista los cambios de estado registrados para un pedido (RN18).
+     *
+     * @param idPedido identificador del pedido
+     * @return historial en orden cronológico (los pedidos anteriores a esta
+     *         funcionalidad pueden no tener historial)
+     * @throws IOException              si ocurre un error al leer el archivo
+     * @throws IllegalArgumentException si el pedido no existe
+     */
+    public List<OrderStatusChange> historialEstados(String idPedido) throws IOException {
+        return historialDao.listarPorPedido(obtenerPorId(idPedido).getId());
+    }
+
+    // ---------------------------------------------------------------- Domiciliarios
+
+    /**
+     * Asigna un domiciliario a un pedido que está listo para recoger (RN10).
+     * El domiciliario queda {@link DriverStatus#EN_ENTREGA} mientras atiende el pedido.
      *
      * @param idPedido       identificador del pedido
      * @param idDomiciliario identificación del domiciliario a asignar
@@ -149,21 +244,20 @@ public class OrderService {
                     + OrderStatus.LISTO_PARA_RECOGER + "'. Estado actual: '" + pedido.getEstado() + "'.");
         }
         if (pedido.tieneDomiciliario()) {
-            throw new IllegalStateException("El pedido ya tiene un domiciliario asignado.");
+            throw new IllegalStateException("El pedido ya tiene un domiciliario asignado (RN10).");
         }
 
-        DeliveryDriver driver = buscarDomiciliario(texto(idDomiciliario, "El id del domiciliario"));
-        if (driver == null) {
-            throw new IllegalArgumentException("No existe un domiciliario con la identificación " + idDomiciliario + ".");
-        }
-        if (!driver.isAvailable()) {
-            throw new IllegalStateException("El domiciliario '" + driver.getName() + "' no está disponible.");
+        DeliveryDriver driver = driverService.obtenerPorId(
+                ServiceValidations.texto(idDomiciliario, "El id del domiciliario"));
+        if (!driver.estaDisponible()) {
+            throw new IllegalStateException("El domiciliario '" + driver.getNombre() + "' no está disponible ("
+                    + driver.getEstado() + ").");
         }
 
         pedido.asignarDomiciliario(driver);
         driver.setEstado(DriverStatus.EN_ENTREGA);
-        driverDao.actualizar(driver);
         orderDao.actualizar(pedido);
+        driverDao.actualizar(driver);
         return pedido;
     }
 
@@ -177,13 +271,14 @@ public class OrderService {
      *                               no puede recibir domiciliario
      */
     public Order asignarDomiciliarioAutomatico(String idPedido) throws IOException {
-        for (DeliveryDriver d : driverDao.listar()) {
-            if (d.isAvailable()) {
-                return asignarDomiciliario(idPedido, d.getIdentification());
-            }
+        DeliveryDriver disponible = driverService.obtenerPrimerDisponible();
+        if (disponible == null) {
+            throw new IllegalStateException("No hay domiciliarios disponibles en este momento.");
         }
-        throw new IllegalStateException("No hay domiciliarios disponibles en este momento.");
+        return asignarDomiciliario(idPedido, disponible.getId());
     }
+
+    // ---------------------------------------------------------------- Consultas
 
     /**
      * Lista todos los pedidos registrados.
@@ -196,7 +291,7 @@ public class OrderService {
     }
 
     /**
-     * Lista los pedidos de un cliente.
+     * Historial de pedidos de un cliente (RF12).
      *
      * @param idCliente identificación del cliente
      * @return lista de pedidos del cliente (vacía si no tiene ninguno)
@@ -204,7 +299,7 @@ public class OrderService {
      * @throws IllegalArgumentException si el id es vacío
      */
     public List<Order> listarPorCliente(String idCliente) throws IOException {
-        String id = texto(idCliente, "El id del cliente");
+        String id = ServiceValidations.texto(idCliente, "El id del cliente");
         List<Order> resultado = new ArrayList<>();
         for (Order o : orderDao.listar()) {
             if (o.getCustomerId().equals(id)) {
@@ -223,10 +318,29 @@ public class OrderService {
      * @throws IllegalArgumentException si el id es vacío
      */
     public List<Order> listarPorRestaurante(String idRestaurante) throws IOException {
-        String id = texto(idRestaurante, "El id del restaurante");
+        String id = ServiceValidations.texto(idRestaurante, "El id del restaurante");
         List<Order> resultado = new ArrayList<>();
         for (Order o : orderDao.listar()) {
             if (o.getRestaurantId().equals(id)) {
+                resultado.add(o);
+            }
+        }
+        return resultado;
+    }
+
+    /**
+     * Lista los pedidos asignados a un domiciliario (RN11).
+     *
+     * @param idDomiciliario identificación del domiciliario
+     * @return lista de pedidos del domiciliario (vacía si no tiene)
+     * @throws IOException              si ocurre un error al leer el archivo
+     * @throws IllegalArgumentException si el id es vacío
+     */
+    public List<Order> listarPorDomiciliario(String idDomiciliario) throws IOException {
+        String id = ServiceValidations.texto(idDomiciliario, "El id del domiciliario");
+        List<Order> resultado = new ArrayList<>();
+        for (Order o : orderDao.listar()) {
+            if (o.tieneDomiciliario() && o.getDomiciliario().getId().equals(id)) {
                 resultado.add(o);
             }
         }
@@ -253,6 +367,26 @@ public class OrderService {
     }
 
     /**
+     * Pedidos entregados de un cliente en un restaurante: base de RN12 para calificar.
+     *
+     * @param idCliente     cliente
+     * @param idRestaurante restaurante
+     * @return pedidos entregados (vacía si no hay)
+     * @throws IOException              si ocurre un error al leer el archivo
+     * @throws IllegalArgumentException si algún id es vacío
+     */
+    public List<Order> listarEntregados(String idCliente, String idRestaurante) throws IOException {
+        String rest = ServiceValidations.texto(idRestaurante, "El id del restaurante");
+        List<Order> resultado = new ArrayList<>();
+        for (Order o : listarPorCliente(idCliente)) {
+            if (o.getRestaurantId().equals(rest) && o.getEstado() == OrderStatus.ENTREGADO) {
+                resultado.add(o);
+            }
+        }
+        return resultado;
+    }
+
+    /**
      * Busca un pedido por su identificador.
      *
      * @param idPedido identificador a buscar
@@ -260,7 +394,7 @@ public class OrderService {
      * @throws IOException si ocurre un error al leer el archivo
      */
     public Order buscarPorId(String idPedido) throws IOException {
-        if (idPedido == null) {
+        if (ServiceValidations.vacio(idPedido)) {
             return null;
         }
         String id = idPedido.trim();
@@ -288,123 +422,110 @@ public class OrderService {
         return pedido;
     }
 
+    // ---------------------------------------------------------------- Comisiones (RN20)
+
     /**
-     * Calcula la comisión que cobra la plataforma por un pedido.
+     * Comisión que cobra la plataforma por un pedido (RN20): el 10 % del total,
+     * solo si el pedido fue entregado. Los pedidos en curso o cancelados no
+     * generan comisión.
      *
      * @param idPedido identificador del pedido
-     * @return valor de la comisión según la {@link com.blinkdelivery.modelo.CommissionPolicy} del pedido
+     * @return valor de la comisión, o {@code 0} si el pedido no está entregado
      * @throws IOException              si ocurre un error al leer el archivo
      * @throws IllegalArgumentException si no existe el pedido
      */
     public double calcularComision(String idPedido) throws IOException {
-        return obtenerPorId(idPedido).getComisionPlataforma();
+        return comision(obtenerPorId(idPedido));
     }
 
     /**
-     * Calcula el valor neto que recibe el restaurante después de descontar la comisión.
+     * Valor neto que recibe el restaurante: total del pedido menos la comisión.
      *
      * @param idPedido identificador del pedido
-     * @return total del pedido menos la comisión
+     * @return total menos comisión (sin descuento si el pedido no está entregado)
      * @throws IOException              si ocurre un error al leer el archivo
      * @throws IllegalArgumentException si no existe el pedido
      */
     public double calcularNetoRestaurante(String idPedido) throws IOException {
-        return obtenerPorId(idPedido).getNetoRestaurante();
+        Order pedido = obtenerPorId(idPedido);
+        return pedido.getTotal() - comision(pedido);
     }
 
     /**
-     * Marca como disponible al domiciliario asignado a un pedido, si tiene uno.
+     * Suma de las comisiones de todos los pedidos entregados (RN20).
      *
-     * @param pedido pedido del que se libera el domiciliario
-     * @throws IOException si ocurre un error al leer o escribir el archivo
+     * @return total de comisiones de la plataforma
+     * @throws IOException si ocurre un error al leer el archivo
      */
+    public double calcularTotalComisiones() throws IOException {
+        double total = 0;
+        for (Order o : orderDao.listar()) {
+            total += comision(o);
+        }
+        return total;
+    }
+
+    /**
+     * Suma de las comisiones de los pedidos entregados de un restaurante (RN20).
+     *
+     * @param idRestaurante restaurante
+     * @return total de comisiones cobradas al restaurante
+     * @throws IOException              si ocurre un error al leer el archivo
+     * @throws IllegalArgumentException si el id es vacío
+     */
+    public double calcularComisionesPorRestaurante(String idRestaurante) throws IOException {
+        double total = 0;
+        for (Order o : listarPorRestaurante(idRestaurante)) {
+            total += comision(o);
+        }
+        return total;
+    }
+
+    // ---------------------------------------------------------------- Auxiliares
+
+    private static double comision(Order pedido) {
+        return pedido.getEstado() == OrderStatus.ENTREGADO ? pedido.getComisionPlataforma() : 0.0;
+    }
+
+    /** Dirección de entrega: la indicada (validando que sea del cliente, RN27) o la principal. */
+    private static Address resolverDireccion(Customer cliente, String idDireccion) {
+        if (ServiceValidations.vacio(idDireccion)) {
+            return cliente.getDireccionPrincipal();
+        }
+        String id = idDireccion.trim();
+        if (!cliente.getDirecciones().stream().anyMatch(a -> a.getId().equals(id))) {
+            throw new IllegalArgumentException("La dirección " + id + " no está registrada por el cliente "
+                    + cliente.getId() + " (RN27).");
+        }
+        return cliente.obtenerDireccion(id);
+    }
+
+    /** Registra el estado actual del pedido en el historial (RN18). */
+    private void registrarHistorial(Order pedido) throws IOException {
+        historialDao.guardar(new OrderStatusChange(pedido.getId(), pedido.getEstado(), LocalDateTime.now()));
+    }
+
+    /** Marca como disponible al domiciliario asignado a un pedido, si tiene uno. */
     private void liberarDomiciliario(Order pedido) throws IOException {
         if (!pedido.tieneDomiciliario()) {
             return;
         }
-        DeliveryDriver driver = buscarDomiciliario(pedido.getDomiciliario().getId());
-        if (driver != null) {
+        DeliveryDriver driver = driverService.buscarPorId(pedido.getDomiciliario().getId());
+        if (driver != null && driver.getEstado() == DriverStatus.EN_ENTREGA) {
             driver.setEstado(DriverStatus.DISPONIBLE);
             driverDao.actualizar(driver);
         }
     }
 
-    /**
-     * Busca un cliente por su identificación.
-     *
-     * @param id identificación del cliente
-     * @return el cliente, o {@code null} si no existe
-     * @throws IOException si ocurre un error al leer el archivo
-     */
-    private Customer buscarCliente(String id) throws IOException {
-        for (Customer c : customerDao.listar()) {
-            if (c.getIdentification().equals(id)) {
-                return c;
+    /** Genera el siguiente id {@code PED-NNNN} a partir del mayor existente (SP08). */
+    private String siguienteId() throws IOException {
+        int max = 0;
+        for (Order o : orderDao.listar()) {
+            String id = o.getId();
+            if (id.startsWith(PREFIJO_ID) && id.substring(PREFIJO_ID.length()).matches("\\d+")) {
+                max = Math.max(max, Integer.parseInt(id.substring(PREFIJO_ID.length())));
             }
         }
-        return null;
-    }
-
-    /**
-     * Busca un restaurante por su identificador.
-     *
-     * @param id identificador del restaurante
-     * @return el restaurante, o {@code null} si no existe
-     * @throws IOException si ocurre un error al leer el archivo
-     */
-    private Restaurant buscarRestaurante(String id) throws IOException {
-        for (Restaurant r : restaurantDao.listar()) {
-            if (r.getId().equals(id)) {
-                return r;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Busca un producto por su identificador.
-     *
-     * @param id identificador del producto
-     * @return el producto, o {@code null} si no existe
-     * @throws IOException si ocurre un error al leer el archivo
-     */
-    private Product buscarProducto(String id) throws IOException {
-        for (Product p : productDao.listar()) {
-            if (p.getId().equals(id)) {
-                return p;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Busca un domiciliario por su identificación.
-     *
-     * @param id identificación del domiciliario
-     * @return el domiciliario, o {@code null} si no existe
-     * @throws IOException si ocurre un error al leer el archivo
-     */
-    private DeliveryDriver buscarDomiciliario(String id) throws IOException {
-        for (DeliveryDriver d : driverDao.listar()) {
-            if (d.getIdentification().equals(id)) {
-                return d;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Valida que un texto no sea nulo ni vacío.
-     *
-     * @param valor texto a validar
-     * @param campo nombre del campo, usado en el mensaje de error
-     * @return el texto sin espacios al inicio ni al final
-     * @throws IllegalArgumentException si el texto es nulo o vacío
-     */
-    private static String texto(String valor, String campo) {
-        if (valor == null || valor.trim().isEmpty()) {
-            throw new IllegalArgumentException(campo + " no puede estar vacío.");
-        }
-        return valor.trim();
+        return PREFIJO_ID + String.format("%04d", max + 1);
     }
 }
