@@ -39,6 +39,19 @@ public class DeliveryDriver extends Person {
     }
 
     /**
+     * RN26: todo domiciliario debe tener teléfono registrado.
+     *
+     * @return siempre {@code true}
+     */
+    @Override
+    protected boolean telefonoObligatorio() {
+        return true;
+    }
+
+    /**
+     * Constructor de compatibilidad usado por la persistencia en archivo plano:
+     * crea el domiciliario sin correo y con placa {@link #SIN_PLACA}.
+     *
      * Constructor de compatibilidad usado por la persistencia en archivo plano:
      * crea el domiciliario sin correo y con placa {@link #SIN_PLACA}.
      *
@@ -97,6 +110,7 @@ public class DeliveryDriver extends Person {
         return calificacionPromedio;
     }
 
+
     /**
      * @param calificacionPromedio Nueva calificación promedio entre 0.0 y 5.0.
      * @throws IllegalArgumentException Si está fuera del rango.
@@ -114,7 +128,36 @@ public class DeliveryDriver extends Person {
         return estado == DriverStatus.DISPONIBLE;
     }
 
-    // ---- Alias de compatibilidad con las capas dao/service existentes ----
+
+    /** @return Alias de {@link #getTipoVehiculo()}. */
+    public String getVehicleType() {
+        return getTipoVehiculo();
+    }
+
+    /** @return Alias de {@link #estaDisponible()}. */
+    public boolean isAvailable() {
+        return estaDisponible();
+    }
+
+    /**
+
+    /**
+     * @param calificacionPromedio Nueva calificación promedio entre 0.0 y 5.0.
+     * @throws IllegalArgumentException Si está fuera del rango.
+     */
+    public final void setCalificacionPromedio(double calificacionPromedio) {
+        Validaciones.noNegativo(calificacionPromedio, "La calificación promedio");
+        if (calificacionPromedio > 5.0) {
+            throw new IllegalArgumentException("La calificación promedio no puede ser mayor que 5.");
+        }
+        this.calificacionPromedio = calificacionPromedio;
+    }
+
+    /** @return {@code true} si el domiciliario está {@link DriverStatus#DISPONIBLE}. */
+    public boolean estaDisponible() {
+        return estado == DriverStatus.DISPONIBLE;
+    }
+
 
     /** @return Alias de {@link #getTipoVehiculo()}. */
     public String getVehicleType() {

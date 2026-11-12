@@ -90,6 +90,20 @@ final class Validaciones {
     }
 
     /**
+
+     * Valida un teléfono opcional: si es nulo o vacío se guarda como cadena vacía;
+     * si viene informado debe tener entre 7 y 10 dígitos (RN26).
+     *
+     * @param valor teléfono a validar
+     * @return el teléfono recortado, o cadena vacía
+     * @throws IllegalArgumentException si viene informado y no cumple el formato
+     */
+    static String telefonoOpcional(String valor) {
+        String t = opcional(valor);
+        return t.isEmpty() ? t : telefono(t);
+    }
+
+    /**
      * Valida un correo opcional: si es nulo o vacío se guarda como cadena vacía;
      * si viene informado debe tener un formato válido.
      *
