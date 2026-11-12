@@ -90,6 +90,7 @@ final class Validaciones {
     }
 
     /**
+
      * Valida un teléfono opcional: si es nulo o vacío se guarda como cadena vacía;
      * si viene informado debe tener entre 7 y 10 dígitos (RN26).
      *

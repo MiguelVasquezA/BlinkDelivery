@@ -18,7 +18,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Servicio de negocio para la gestión de pedidos.
@@ -38,9 +37,10 @@ import java.util.Map;
  */
 public class OrderService {
 
+
     /** Prefijo de los identificadores de pedido. */
     private static final String PREFIJO_ID = "PED-";
-
+  
     /** DAO que guarda y lee los pedidos en el archivo de texto. */
     private final OrderFileDao orderDao = new OrderFileDao();
 
@@ -59,6 +59,13 @@ public class OrderService {
 
     /**
      * Crea un pedido de un solo producto, entregado en la dirección principal del cliente.
+     * Crea un pedido nuevo en estado {@link OrderStatus#RECIBIDO} y sin domiciliario asignado.
+     * <p>
+     * Verifica que el cliente, el restaurante y el producto existan, que el
+     * restaurante esté abierto y que el producto pertenezca a ese restaurante
+     * y esté disponible. El pedido se entrega en la dirección principal del
+     * cliente y congela el precio vigente del producto.
+     * </p>
      *
      * @param idCliente     identificación del cliente que hace el pedido
      * @param idRestaurante identificador del restaurante
@@ -122,6 +129,7 @@ public class OrderService {
             cantidades.merge(idProducto, cantidad, Integer::sum);
         }
 
+
         List<OrderItem> items = new ArrayList<>();
         for (Map.Entry<String, Integer> e : cantidades.entrySet()) {
             Product producto = productService.obtenerDeRestaurante(e.getKey(), restaurante.getId());
@@ -132,12 +140,15 @@ public class OrderService {
         }
 
         Order pedido = new Order(siguienteId(), cliente, restaurante, direccion, items);
+        String idPedido = "PED-" + String.format("%04d", orderDao.listar().size() + 1);
+
+        List<OrderItem> items = new ArrayList<>();
+        items.add(new OrderItem(producto, cantidad));
+        Order pedido = new Order(idPedido, cliente, restaurante, cliente.getDireccionPrincipal(), items);
         orderDao.guardar(pedido);
         registrarHistorial(pedido);
         return pedido;
     }
-
-    // ---------------------------------------------------------------- Ciclo de vida
 
     /**
      * Cambia el estado de un pedido validando que la transición esté permitida
@@ -146,6 +157,10 @@ public class OrderService {
      * Las transiciones válidas las define {@link OrderStatus#puedeCambiarA(OrderStatus)}.
      * Para pasar a {@link OrderStatus#EN_CAMINO} el pedido debe tener domiciliario.
      * Al llegar a un estado final se libera al domiciliario.
+     * Las transiciones válidas las define {@link OrderStatus#puedeCambiarA(OrderStatus)}
+     * y las aplica {@link Order#cambiarEstado(OrderStatus)}. Para pasar a
+     * {@link OrderStatus#EN_CAMINO} el pedido debe tener domiciliario asignado.
+     * Al pasar a un estado final se libera al domiciliario.
      * </p>
      *
      * @param idPedido    identificador del pedido
@@ -175,6 +190,7 @@ public class OrderService {
         }
         Order pedido = obtenerPorId(idPedido);
         pedido.cambiarEstado(nuevoEstado);
+        Order pedido = obtenerPorId(idPedido);
         orderDao.actualizar(pedido);
         registrarHistorial(pedido);
 
@@ -222,8 +238,6 @@ public class OrderService {
         return historialDao.listarPorPedido(obtenerPorId(idPedido).getId());
     }
 
-    // ---------------------------------------------------------------- Domiciliarios
-
     /**
      * Asigna un domiciliario a un pedido que está listo para recoger (RN10).
      * El domiciliario queda {@link DriverStatus#EN_ENTREGA} mientras atiende el pedido.
@@ -244,7 +258,9 @@ public class OrderService {
                     + OrderStatus.LISTO_PARA_RECOGER + "'. Estado actual: '" + pedido.getEstado() + "'.");
         }
         if (pedido.tieneDomiciliario()) {
+
             throw new IllegalStateException("El pedido ya tiene un domiciliario asignado (RN10).");
+            throw new IllegalStateException("El pedido ya tiene un domiciliario asignado.");
         }
 
         DeliveryDriver driver = driverService.obtenerPorId(
@@ -256,6 +272,7 @@ public class OrderService {
 
         pedido.asignarDomiciliario(driver);
         driver.setEstado(DriverStatus.EN_ENTREGA);
+        driverDao.actualizar(driver);
         orderDao.actualizar(pedido);
         driverDao.actualizar(driver);
         return pedido;
@@ -277,8 +294,6 @@ public class OrderService {
         }
         return asignarDomiciliario(idPedido, disponible.getId());
     }
-
-    // ---------------------------------------------------------------- Consultas
 
     /**
      * Lista todos los pedidos registrados.
@@ -422,7 +437,6 @@ public class OrderService {
         return pedido;
     }
 
-    // ---------------------------------------------------------------- Comisiones (RN20)
 
     /**
      * Comisión que cobra la plataforma por un pedido (RN20): el 10 % del total,
@@ -431,11 +445,13 @@ public class OrderService {
      *
      * @param idPedido identificador del pedido
      * @return valor de la comisión, o {@code 0} si el pedido no está entregado
+     * @return valor de la comisión según la {@link com.blinkdelivery.modelo.CommissionPolicy} del pedido
      * @throws IOException              si ocurre un error al leer el archivo
      * @throws IllegalArgumentException si no existe el pedido
      */
     public double calcularComision(String idPedido) throws IOException {
         return comision(obtenerPorId(idPedido));
+        return obtenerPorId(idPedido).getComisionPlataforma();
     }
 
     /**
@@ -449,6 +465,7 @@ public class OrderService {
     public double calcularNetoRestaurante(String idPedido) throws IOException {
         Order pedido = obtenerPorId(idPedido);
         return pedido.getTotal() - comision(pedido);
+        return obtenerPorId(idPedido).getNetoRestaurante();
     }
 
     /**
@@ -461,6 +478,14 @@ public class OrderService {
         double total = 0;
         for (Order o : orderDao.listar()) {
             total += comision(o);
+    private void liberarDomiciliario(Order pedido) throws IOException {
+        if (!pedido.tieneDomiciliario()) {
+            return;
+        }
+        DeliveryDriver driver = buscarDomiciliario(pedido.getDomiciliario().getId());
+        if (driver != null) {
+            driver.setEstado(DriverStatus.DISPONIBLE);
+            driverDao.actualizar(driver);
         }
         return total;
     }
@@ -481,10 +506,21 @@ public class OrderService {
         return total;
     }
 
-    // ---------------------------------------------------------------- Auxiliares
-
     private static double comision(Order pedido) {
         return pedido.getEstado() == OrderStatus.ENTREGADO ? pedido.getComisionPlataforma() : 0.0;
+     * Busca un cliente por su identificación.
+     *
+     * @param id identificación del cliente
+     * @return el cliente, o {@code null} si no existe
+     * @throws IOException si ocurre un error al leer el archivo
+     */
+    private Customer buscarCliente(String id) throws IOException {
+        for (Customer c : customerDao.listar()) {
+            if (c.getIdentification().equals(id)) {
+                return c;
+            }
+        }
+        return null;
     }
 
     /** Dirección de entrega: la indicada (validando que sea del cliente, RN27) o la principal. */

@@ -28,6 +28,7 @@ public abstract class Person implements Serializable {
      * @param id       Documento de identidad (obligatorio).
      * @param nombre   Nombre completo (obligatorio).
      * @param telefono Teléfono de 7 a 10 dígitos (obligatorio solo si el rol lo exige).
+     * @param telefono Teléfono de 7 a 10 dígitos (obligatorio).
      * @param email    Correo electrónico (opcional; si se informa debe ser válido).
      * @throws IllegalArgumentException Si algún dato obligatorio es nulo, vacío o inválido.
      */
@@ -56,10 +57,13 @@ public abstract class Person implements Serializable {
         this.nombre = Validaciones.texto(nombre, "El nombre");
     }
 
+
     /** @return Teléfono de contacto, o cadena vacía si no fue registrado. */
+    /** @return Teléfono de contacto. */
     public String getTelefono() {
         return telefono;
     }
+
 
     /** @return {@code true} si la persona tiene un teléfono registrado. */
     public boolean tieneTelefono() {
@@ -84,6 +88,12 @@ public abstract class Person implements Serializable {
         this.telefono = telefonoObligatorio()
                 ? Validaciones.telefono(telefono)
                 : Validaciones.telefonoOpcional(telefono);
+    /**
+     * @param telefono Nuevo teléfono de 7 a 10 dígitos.
+     * @throws IllegalArgumentException Si es vacío o no cumple el formato.
+     */
+    public final void setTelefono(String telefono) {
+        this.telefono = Validaciones.telefono(telefono);
     }
 
     /** @return Correo electrónico, o cadena vacía si no fue registrado. */
@@ -98,8 +108,6 @@ public abstract class Person implements Serializable {
     public final void setEmail(String email) {
         this.email = Validaciones.emailOpcional(email);
     }
-
-    // ---- Alias de compatibilidad con las capas dao/service existentes ----
 
     /** @return Alias de {@link #getId()}. */
     public String getIdentification() {
