@@ -27,7 +27,7 @@ public abstract class Person implements Serializable {
      *
      * @param id       Documento de identidad (obligatorio).
      * @param nombre   Nombre completo (obligatorio).
-     * @param telefono Teléfono de 7 a 10 dígitos (obligatorio).
+     * @param telefono Teléfono de 7 a 10 dígitos (obligatorio solo si el rol lo exige).
      * @param email    Correo electrónico (opcional; si se informa debe ser válido).
      * @throws IllegalArgumentException Si algún dato obligatorio es nulo, vacío o inválido.
      */
@@ -56,17 +56,34 @@ public abstract class Person implements Serializable {
         this.nombre = Validaciones.texto(nombre, "El nombre");
     }
 
-    /** @return Teléfono de contacto. */
+    /** @return Teléfono de contacto, o cadena vacía si no fue registrado. */
     public String getTelefono() {
         return telefono;
     }
 
+    /** @return {@code true} si la persona tiene un teléfono registrado. */
+    public boolean tieneTelefono() {
+        return telefono != null && !telefono.isEmpty();
+    }
+
     /**
-     * @param telefono Nuevo teléfono de 7 a 10 dígitos.
-     * @throws IllegalArgumentException Si es vacío o no cumple el formato.
+     * Indica si el rol exige teléfono (RN26: obligatorio para domiciliarios,
+     * opcional para quien solo es cliente).
+     *
+     * @return {@code true} si el teléfono es obligatorio para este rol
+     */
+    protected boolean telefonoObligatorio() {
+        return false;
+    }
+
+    /**
+     * @param telefono Nuevo teléfono de 7 a 10 dígitos; puede ser vacío si el rol no lo exige.
+     * @throws IllegalArgumentException Si no cumple el formato o falta siendo obligatorio.
      */
     public final void setTelefono(String telefono) {
-        this.telefono = Validaciones.telefono(telefono);
+        this.telefono = telefonoObligatorio()
+                ? Validaciones.telefono(telefono)
+                : Validaciones.telefonoOpcional(telefono);
     }
 
     /** @return Correo electrónico, o cadena vacía si no fue registrado. */

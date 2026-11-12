@@ -39,6 +39,16 @@ public class DeliveryDriver extends Person {
     }
 
     /**
+     * RN26: todo domiciliario debe tener teléfono registrado.
+     *
+     * @return siempre {@code true}
+     */
+    @Override
+    protected boolean telefonoObligatorio() {
+        return true;
+    }
+
+    /**
      * Constructor de compatibilidad usado por la persistencia en archivo plano:
      * crea el domiciliario sin correo y con placa {@link #SIN_PLACA}.
      *
