@@ -1,0 +1,28 @@
+/* Estilos globales de BLINK DELIVERY (Tailwind + utilidades propias) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base: fondo oscuro y texto blanco en toda la app */
+@layer base {
+  html,
+  body,
+  #root {
+    @apply min-h-screen bg-app;
+  }
+  body {
+    @apply text-white antialiased;
+  }
+}
+
+/* Componentes reutilizables de botón */
+@layer components {
+  /* Botón principal: degradado morado -> fucsia con resplandor neón */
+  .btn-neon {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-neon-deep to-fuchsia px-4 py-2 text-sm font-semibold text-white shadow-neon transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  /* Botón secundario: borde sutil que se ilumina al pasar el mouse */
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-card px-4 py-2 text-sm font-medium text-white transition hover:border-neon hover:shadow-neon;
+  }
+}

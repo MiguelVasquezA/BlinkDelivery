@@ -59,7 +59,6 @@ public abstract class Person implements Serializable {
 
 
     /** @return Teléfono de contacto, o cadena vacía si no fue registrado. */
-    /** @return Teléfono de contacto. */
     public String getTelefono() {
         return telefono;
     }
@@ -88,12 +87,6 @@ public abstract class Person implements Serializable {
         this.telefono = telefonoObligatorio()
                 ? Validaciones.telefono(telefono)
                 : Validaciones.telefonoOpcional(telefono);
-    /**
-     * @param telefono Nuevo teléfono de 7 a 10 dígitos.
-     * @throws IllegalArgumentException Si es vacío o no cumple el formato.
-     */
-    public final void setTelefono(String telefono) {
-        this.telefono = Validaciones.telefono(telefono);
     }
 
     /** @return Correo electrónico, o cadena vacía si no fue registrado. */
