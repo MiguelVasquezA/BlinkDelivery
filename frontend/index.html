@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlinkDelivery · Prueba de API</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="encabezado">
+    <h1>BlinkDelivery</h1>
+    <span id="estado-api" class="estado">Comprobando API…</span>
+  </header>
+
+  <div class="contenedor">
+    <nav class="menu" id="menu" aria-label="Recursos"></nav>
+
+    <main class="principal">
+      <section class="tarjeta">
+        <div class="cabecera-tarjeta">
+          <h2 id="titulo-recurso">Recurso</h2>
+          <button type="button" id="btn-recargar" class="secundario">Recargar</button>
+        </div>
+        <p id="mensaje" class="mensaje" role="status" hidden></p>
+        <div class="tabla-contenedor" id="tabla"></div>
+      </section>
+
+      <section class="tarjeta" id="tarjeta-formulario">
+        <h2>Crear registro</h2>
+        <form id="formulario" autocomplete="off"></form>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+:root {
+  --primario: #2563eb;
+  --primario-oscuro: #1d4ed8;
+  --fondo: #f1f5f9;
+  --tarjeta: #ffffff;
+  --texto: #0f172a;
+  --texto-suave: #64748b;
+  --borde: #e2e8f0;
+  --ok: #15803d;
+  --ok-fondo: #dcfce7;
+  --error: #b91c1c;
+  --error-fondo: #fee2e2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+  line-height: 1.4;
+}
+
+.encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--primario);
+  color: #fff;
+}
+
+.encabezado h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.estado {
+  font-size: 0.9rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.estado.conectado {
+  background: #bbf7d0;
+  color: #14532d;
+}
+
+.estado.desconectado {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.contenedor {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  padding: 20px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu button {
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: var(--tarjeta);
+  cursor: pointer;
+  font: inherit;
+  color: var(--texto);
+}
+
+.menu button:hover {
+  border-color: var(--primario);
+}
+
+.menu button.activo {
+  background: var(--primario);
+  border-color: var(--primario);
+  color: #fff;
+}
+
+.principal {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.tarjeta {
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 18px 20px;
+  min-width: 0;
+}
+
+.tarjeta h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+
+.cabecera-tarjeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cabecera-tarjeta h2 {
+  margin-bottom: 12px;
+}
+
+button {
+  cursor: pointer;
+}
+
+.secundario,
+#formulario button[type="submit"] {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font: inherit;
+  border: 1px solid var(--primario);
+}
+
+.secundario {
+  background: var(--tarjeta);
+  color: var(--primario);
+}
+
+#formulario button[type="submit"] {
+  background: var(--primario);
+  color: #fff;
+  margin-top: 6px;
+}
+
+#formulario button[type="submit"]:hover {
+  background: var(--primario-oscuro);
+}
+
+#formulario button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.mensaje {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+
+.mensaje.ok {
+  background: var(--ok-fondo);
+  color: var(--ok);
+}
+
+.mensaje.error {
+  background: var(--error-fondo);
+  color: var(--error);
+}
+
+.tabla-contenedor {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--borde);
+  white-space: nowrap;
+}
+
+th {
+  color: var(--texto-suave);
+  font-weight: 600;
+  background: #f8fafc;
+}
+
+td.vacio {
+  color: var(--texto-suave);
+  text-align: center;
+  white-space: normal;
+}
+
+#formulario {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 16px;
+}
+
+#formulario label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+}
+
+#formulario label span.req {
+  color: var(--error);
+}
+
+#formulario input,
+#formulario select {
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  font: inherit;
+  color: var(--texto);
+  background: #fff;
+}
+
+#formulario input:focus,
+#formulario select:focus {
+  outline: 2px solid var(--primario);
+  outline-offset: -1px;
+}
+
+#formulario .fila-completa {
+  grid-column: 1 / -1;
+}
+
+#formulario .acciones {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .contenedor {
+    grid-template-columns: 1fr;
+  }
+
+  .menu {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
