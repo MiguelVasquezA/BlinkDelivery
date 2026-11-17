@@ -23,6 +23,91 @@
   display: none !important;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Logo oficial (fondo blanco: se muestra sobre una tarjeta clara) ---------- */
+
+.logo-grande {
+  width: min(340px, 80vw);
+  height: auto;
+  border-radius: 22px;
+  background: #fff;
+  padding: 14px 22px;
+  box-shadow: 0 0 40px var(--acento-brillo);
+}
+
+.logo-app {
+  height: 44px;
+  width: auto;
+  border-radius: 10px;
+  background: #fff;
+  padding: 3px 8px;
+  display: block;
+}
+
+/* ---------- Acceso de administrador (engranaje discreto) ---------- */
+
+.boton-admin {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto-suave);
+  opacity: 0.35;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+
+.boton-admin:hover,
+.boton-admin:focus-visible {
+  opacity: 1;
+  color: var(--texto);
+}
+
+/* ---------- Pestañas de inicio de sesión / crear cuenta ---------- */
+
+.pestanas-acceso {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.pestana-acceso {
+  padding: 10px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+
+.pestana-acceso.activa {
+  background: linear-gradient(135deg, var(--acento), var(--acento-2));
+  color: #fff;
+}
+
+.formulario-acceso {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -192,7 +277,7 @@ h1, h2, h3 {
 
 /* ---------- Selección de perfil ---------- */
 
-#seleccion.activa {
+#acceso.activa {
   display: grid;
   place-items: start center;
   padding: 24px;
@@ -221,6 +306,10 @@ h1, h2, h3 {
 
 .barra-simple .enlace {
   justify-self: start;
+}
+
+.ayuda.error {
+  color: #fca5a5;
 }
 
 .ayuda {

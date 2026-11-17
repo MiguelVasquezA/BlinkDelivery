@@ -213,13 +213,9 @@ async function api(metodo, ruta, cuerpo) {
   return datos;
 }
 
+/** La conexión se comprueba en silencio: sin indicador visual, solo un aviso en consola si falla. */
 function marcarConexion(ok) {
-  for (const id of ["estado-api", "estado-api-inicio"]) {
-    const el = $(id);
-    if (!el) continue;
-    el.textContent = ok ? "API conectada" : "API sin conexión";
-    el.className = `estado-api ${ok ? "conectado" : "desconectado"}`;
-  }
+  if (!ok) console.warn("BlinkDelivery: no se pudo contactar la API.");
 }
 
 async function comprobarConexion() {
@@ -239,32 +235,105 @@ function mostrarPantalla(id) {
   window.scrollTo(0, 0);
 }
 
-async function elegirRol(rol) {
-  estado.rol = rol;
-  const cfg = ROLES[rol];
-  $("titulo-seleccion").textContent = `Entrar como ${cfg.titulo.toLowerCase()}`;
-  const lista = $("lista-perfiles");
-  lista.innerHTML = '<p class="ayuda">Cargando perfiles…</p>';
-  mostrarPantalla("seleccion");
+// ================================================================ acceso: inicio de sesión y creación de cuenta
 
-  try {
-    const perfiles = await api("GET", `/${cfg.ruta}`);
-    cache.set("perfiles", perfiles);
-    lista.innerHTML = perfiles.length
-      ? perfiles.map((p) => `
-          <button type="button" class="perfil-opcion" data-accion="elegir-perfil" data-clave="${esc(p[cfg.clave])}">
-            <span><strong>${esc(cfg.nombre(p))}</strong><small>${esc(cfg.detalle(p))}</small></span>
-            <span class="boton-secundario">Entrar</span>
-          </button>`).join("")
-      : vacio("👤", "Aún no hay perfiles", "Crea el primero con el botón de abajo.");
-  } catch (err) {
-    lista.innerHTML = vacio("⚠️", "No se pudieron cargar los perfiles", err.message);
+let modoAcceso = "login";
+let camposAcceso = [];
+
+function mostrarAcceso(rol) {
+  estado.rol = rol;
+  modoAcceso = "login";
+  $("titulo-acceso").textContent = `Acceso ${ROLES[rol].titulo.toLowerCase()}`;
+  marcarPestanaAcceso();
+  renderFormularioAcceso();
+  mostrarPantalla("acceso");
+}
+
+function marcarPestanaAcceso() {
+  for (const boton of document.querySelectorAll(".pestana-acceso")) {
+    boton.classList.toggle("activa", boton.dataset.modo === modoAcceso);
   }
 }
 
-function entrarPorClave(clave) {
-  const perfil = (cache.get("perfiles") || []).find((p) => p[ROLES[estado.rol].clave] === clave);
-  if (perfil) entrar(estado.rol, perfil);
+function renderFormularioAcceso() {
+  const cfg = ROLES[estado.rol];
+  const etiquetaId = estado.rol === "restaurante" ? "ID del restaurante" : "Identificación";
+  const clave = { nombre: "clave", etiqueta: "Contraseña", tipo: "password", obligatorio: true };
+
+  camposAcceso = modoAcceso === "login"
+    ? [{ nombre: "usuario", etiqueta: etiquetaId, obligatorio: true }, clave]
+    : [...cfg.crear, { ...clave, etiqueta: "Contraseña (mínimo 6 caracteres)" }];
+
+  const form = $("form-acceso");
+  form.className = "formulario-modal formulario-acceso";
+  form.innerHTML = camposAcceso.map((c) => campoHtml(c, "")).join("") +
+    `<button type="submit" class="boton-primario">${modoAcceso === "login" ? "Ingresar" : "Crear cuenta"}</button>`;
+
+  const ayuda = $("ayuda-acceso");
+  ayuda.className = "ayuda";
+  ayuda.textContent = modoAcceso === "login"
+    ? "Ingresa con tu identificación y tu contraseña."
+    : "Si el perfil ya existe y aún no tiene contraseña, se la asignaremos con esta.";
+}
+
+async function perfilExiste(ruta, id) {
+  try {
+    await api("GET", `/${ruta}/${enc(id)}`);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function enviarAcceso(e) {
+  e.preventDefault();
+  const form = e.target;
+  const boton = form.querySelector('button[type="submit"]');
+  const ayuda = $("ayuda-acceso");
+  boton.disabled = true;
+  try {
+    const datos = leerFormulario(form, camposAcceso);
+    const rol = estado.rol;
+    const cfg = ROLES[rol];
+
+    if (modoAcceso === "login") {
+      entrar(rol, await api("POST", "/auth/login", { rol, usuario: datos.usuario, clave: datos.clave }));
+      return;
+    }
+
+    const id = datos[cfg.clave];
+    if (!(await perfilExiste(cfg.ruta, id))) {
+      const { clave, ...perfilNuevo } = datos;
+      await api("POST", `/${cfg.ruta}`, perfilNuevo);
+    }
+    await api("POST", "/auth/clave", { rol, usuario: id, clave: datos.clave });
+    entrar(rol, await api("POST", "/auth/login", { rol, usuario: id, clave: datos.clave }));
+  } catch (err) {
+    ayuda.textContent = err.message;
+    ayuda.className = "ayuda error";
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+/** Vista general de administrador, protegida con una clave antes de mostrarse. */
+const ADMIN_CLAVE = "admin123";
+
+function abrirAccesoAdmin() {
+  abrirModal({
+    titulo: "Acceso de administrador",
+    textoEnviar: "Entrar",
+    mensajeOk: "",
+    campos: [{ nombre: "clave", etiqueta: "Clave de administrador", tipo: "password", obligatorio: true }],
+    alTerminar: () => {},
+    enviar: async (datos) => {
+      if (datos.clave !== ADMIN_CLAVE) throw new Error("Clave de administrador incorrecta.");
+      estado.rol = "general";
+      estado.perfil = null;
+      estado.pestana = null;
+      mostrarAplicacion();
+    },
+  });
 }
 
 function entrar(rol, perfil) {
@@ -364,13 +433,17 @@ function campoHtml(c, valor) {
     const max = c.max !== undefined ? `max="${c.max}"` : "";
     control = `<input type="number" name="${c.nombre}" value="${esc(v)}" step="any" ${min} ${max} ${req}>`;
   } else {
-    control = `<input type="${c.tipo === "email" ? "email" : "text"}" name="${c.nombre}" value="${esc(v)}" ${req}>`;
+    const tipoInput = { email: "email", password: "password" }[c.tipo] || "text";
+    control = `<input type="${tipoInput}" name="${c.nombre}" value="${esc(v)}" autocomplete="${tipoInput === "password" ? "new-password" : "off"}" ${req}>`;
   }
   return `<label class="${c.completa ? "completa" : ""}"><span>${etiqueta}</span>${control}</label>`;
 }
 
-function abrirModal({ titulo, campos, valores = {}, textoEnviar = "Guardar", enviar, alTerminar = () => renderVista() }) {
-  modalActual = { campos, enviar, alTerminar };
+function abrirModal({
+  titulo, campos, valores = {}, textoEnviar = "Guardar", enviar,
+  alTerminar = () => renderVista(), mensajeOk = "Guardado correctamente.",
+}) {
+  modalActual = { campos, enviar, alTerminar, mensajeOk };
   $("modal-titulo").textContent = titulo;
   const form = $("modal-form");
   form.innerHTML = campos.map((c) => campoHtml(c, valores[c.nombre])).join("") +
@@ -873,7 +946,6 @@ async function vistaGeneral() {
 // ================================================================ acciones (delegación de eventos)
 
 const ACCIONES = {
-  "elegir-perfil": (d) => entrarPorClave(d.clave),
   "ir-pestana": (d) => {
     estado.pestana = d.pestana;
     renderNav();
@@ -947,10 +1019,10 @@ $("modal-form").addEventListener("submit", async (e) => {
   boton.disabled = true;
   try {
     const datos = leerFormulario(form, modalActual.campos);
-    const { enviar, alTerminar } = modalActual;
+    const { enviar, alTerminar, mensajeOk } = modalActual;
     await enviar(datos);
     cerrarModal();
-    toast("Guardado correctamente.");
+    if (mensajeOk) toast(mensajeOk);
     await alTerminar();
   } catch (err) {
     errorEl.textContent = err.message;
@@ -960,34 +1032,21 @@ $("modal-form").addEventListener("submit", async (e) => {
   }
 });
 
-function abrirCrearPerfil() {
-  const rol = estado.rol;
-  const cfg = ROLES[rol];
-  abrirModal({
-    titulo: `Nuevo perfil de ${cfg.titulo.toLowerCase()}`,
-    textoEnviar: "Crear y entrar",
-    campos: cfg.crear,
-    alTerminar: () => {},
-    enviar: async (datos) => {
-      const creado = await api("POST", `/${cfg.ruta}`, datos);
-      entrar(rol, creado);
-    },
-  });
-}
-
 // ================================================================ arranque
 
 function iniciar() {
   document.querySelectorAll("[data-rol]").forEach((boton) => {
-    boton.addEventListener("click", () => elegirRol(boton.dataset.rol));
+    boton.addEventListener("click", () => mostrarAcceso(boton.dataset.rol));
   });
-  $("btn-nuevo-perfil").addEventListener("click", abrirCrearPerfil);
-  $("btn-vista-general").addEventListener("click", () => {
-    estado.rol = "general";
-    estado.perfil = null;
-    estado.pestana = null;
-    mostrarAplicacion();
+  document.querySelectorAll(".pestana-acceso").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      modoAcceso = boton.dataset.modo;
+      marcarPestanaAcceso();
+      renderFormularioAcceso();
+    });
   });
+  $("form-acceso").addEventListener("submit", enviarAcceso);
+  $("btn-admin").addEventListener("click", abrirAccesoAdmin);
   $("btn-cambiar").addEventListener("click", cambiarRol);
 
   comprobarConexion();

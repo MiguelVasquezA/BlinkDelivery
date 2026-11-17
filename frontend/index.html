@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="BlinkDelivery: pide, entrega y gestiona pedidos.">
   <title>BlinkDelivery</title>
+  <link rel="icon" href="assets/logo.jpeg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,13 +13,11 @@
   <!-- ============ Pantalla de inicio: selección de rol ============ -->
   <section id="inicio" class="pantalla activa">
     <div class="inicio-contenido">
-      <div class="marca marca-grande">
-        <span class="marca-icono">⚡</span>
-        <h1>BlinkDelivery</h1>
+      <div class="marca-grande">
+        <img class="logo-grande" src="assets/logo.jpeg" alt="Blink Delivery: tu pedido en un blink">
+        <h1 class="sr-only">BlinkDelivery</h1>
         <p class="eslogan">Pide, entrega y gestiona tus pedidos en minutos.</p>
       </div>
-
-      <p class="estado-api" id="estado-api-inicio">Comprobando conexión…</p>
 
       <div class="tarjetas-rol">
         <button type="button" class="tarjeta-rol" data-rol="cliente">
@@ -37,22 +36,25 @@
           <span>Revisa entregas disponibles y tu perfil.</span>
         </button>
       </div>
-
-      <button type="button" class="enlace" id="btn-vista-general">Vista general (administrador)</button>
     </div>
+
+    <button type="button" class="boton-admin" id="btn-admin" title="Administración" aria-label="Acceso de administrador">⚙</button>
   </section>
 
-  <!-- ============ Selección de perfil dentro de un rol ============ -->
-  <section id="seleccion" class="pantalla">
+  <!-- ============ Inicio de sesión / creación de cuenta por rol ============ -->
+  <section id="acceso" class="pantalla">
     <div class="seleccion-contenido">
       <header class="barra-simple">
         <button type="button" class="enlace" data-volver="inicio">← Volver</button>
-        <h2 id="titulo-seleccion">Elige tu perfil</h2>
+        <h2 id="titulo-acceso">Ingresar</h2>
         <span></span>
       </header>
-      <p class="ayuda">Selecciona un registro existente o crea uno nuevo para entrar.</p>
-      <div id="lista-perfiles" class="lista-perfiles"></div>
-      <button type="button" class="boton-primario" id="btn-nuevo-perfil">+ Crear perfil nuevo</button>
+      <div class="pestanas-acceso" role="tablist">
+        <button type="button" class="pestana-acceso activa" data-modo="login" role="tab">Iniciar sesión</button>
+        <button type="button" class="pestana-acceso" data-modo="registro" role="tab">Crear cuenta</button>
+      </div>
+      <form id="form-acceso" class="formulario-acceso" autocomplete="off"></form>
+      <p class="ayuda" id="ayuda-acceso"></p>
     </div>
   </section>
 
@@ -60,11 +62,9 @@
   <section id="aplicacion" class="pantalla">
     <header class="barra-superior">
       <div class="marca">
-        <span class="marca-icono">⚡</span>
-        <span class="marca-texto">BlinkDelivery</span>
+        <img class="logo-app" src="assets/logo.jpeg" alt="Blink Delivery">
       </div>
       <div class="barra-derecha">
-        <span class="estado-api" id="estado-api">Comprobando…</span>
         <span class="usuario" id="usuario"></span>
         <button type="button" class="enlace" id="btn-cambiar">Cambiar</button>
       </div>
