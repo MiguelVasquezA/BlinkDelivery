@@ -23,7 +23,38 @@
 hs_err_pid*
 replay_pid*
 
+# IntelliJ IDEA
 .idea/
+*.iml
+*.ipr
+*.iws
+out/
+cmake-build-*/
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+
+# Gradle (por si se migra el proyecto)
+.gradle/
+build/
+
+# Variables de entorno y secretos (nunca subir credenciales)
+.env
+.env.*
+!.env.example
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Node / Vite (frontend)
 node_modules/
