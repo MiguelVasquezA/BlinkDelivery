@@ -22,7 +22,7 @@ public class RestaurantFileDao {
      */
     public void guardar(Restaurant restaurant) throws IOException {
         List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(restaurant.toString());
+        lineas.add(restaurant.toRegistro());
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
 
@@ -71,7 +71,7 @@ public class RestaurantFileDao {
     public void actualizar(Restaurant restaurant) throws IOException {
         List<String> lineas = new ArrayList<>();
         for (Restaurant r : listar()) {
-            lineas.add(r.getId().equalsIgnoreCase(restaurant.getId()) ? restaurant.toString() : r.toString());
+            lineas.add(r.getId().equalsIgnoreCase(restaurant.getId()) ? restaurant.toRegistro() : r.toRegistro());
         }
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
