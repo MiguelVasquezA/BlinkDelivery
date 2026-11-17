@@ -1,5 +1,5 @@
-// Cambia esta URL cuando el backend esté desplegado en Render (por ejemplo https://blinkdelivery-api.onrender.com/api).
-const API_URL = "http://localhost:8080/api";
+// API en producción (Render). Para desarrollo local con el backend en tu máquina, usa "http://localhost:8080/api".
+const API_URL = "https://blinkdelivery.onrender.com/api";
 
 /**
  * Configuración de cada recurso de la API.
