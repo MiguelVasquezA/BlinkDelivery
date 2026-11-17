@@ -3,34 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BlinkDelivery · Prueba de API</title>
+  <meta name="description" content="BlinkDelivery: pide, entrega y gestiona pedidos.">
+  <title>BlinkDelivery</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="encabezado">
-    <h1>BlinkDelivery</h1>
-    <span id="estado-api" class="estado">Comprobando API…</span>
-  </header>
 
-  <div class="contenedor">
-    <nav class="menu" id="menu" aria-label="Recursos"></nav>
+  <!-- ============ Pantalla de inicio: selección de rol ============ -->
+  <section id="inicio" class="pantalla activa">
+    <div class="inicio-contenido">
+      <div class="marca marca-grande">
+        <span class="marca-icono">⚡</span>
+        <h1>BlinkDelivery</h1>
+        <p class="eslogan">Pide, entrega y gestiona tus pedidos en minutos.</p>
+      </div>
 
-    <main class="principal">
-      <section class="tarjeta">
-        <div class="cabecera-tarjeta">
-          <h2 id="titulo-recurso">Recurso</h2>
-          <button type="button" id="btn-recargar" class="secundario">Recargar</button>
-        </div>
-        <p id="mensaje" class="mensaje" role="status" hidden></p>
-        <div class="tabla-contenedor" id="tabla"></div>
-      </section>
+      <p class="estado-api" id="estado-api-inicio">Comprobando conexión…</p>
 
-      <section class="tarjeta" id="tarjeta-formulario">
-        <h2>Crear registro</h2>
-        <form id="formulario" autocomplete="off"></form>
-      </section>
-    </main>
+      <div class="tarjetas-rol">
+        <button type="button" class="tarjeta-rol" data-rol="cliente">
+          <span class="rol-icono">🧑</span>
+          <strong>Cliente</strong>
+          <span>Explora restaurantes, pide y califica.</span>
+        </button>
+        <button type="button" class="tarjeta-rol" data-rol="restaurante">
+          <span class="rol-icono">🏪</span>
+          <strong>Restaurante</strong>
+          <span>Gestiona tu catálogo, categorías y pedidos.</span>
+        </button>
+        <button type="button" class="tarjeta-rol" data-rol="domiciliario">
+          <span class="rol-icono">🛵</span>
+          <strong>Domiciliario</strong>
+          <span>Revisa entregas disponibles y tu perfil.</span>
+        </button>
+      </div>
+
+      <button type="button" class="enlace" id="btn-vista-general">Vista general (administrador)</button>
+    </div>
+  </section>
+
+  <!-- ============ Selección de perfil dentro de un rol ============ -->
+  <section id="seleccion" class="pantalla">
+    <div class="seleccion-contenido">
+      <header class="barra-simple">
+        <button type="button" class="enlace" data-volver="inicio">← Volver</button>
+        <h2 id="titulo-seleccion">Elige tu perfil</h2>
+        <span></span>
+      </header>
+      <p class="ayuda">Selecciona un registro existente o crea uno nuevo para entrar.</p>
+      <div id="lista-perfiles" class="lista-perfiles"></div>
+      <button type="button" class="boton-primario" id="btn-nuevo-perfil">+ Crear perfil nuevo</button>
+    </div>
+  </section>
+
+  <!-- ============ Aplicación (vista de un rol o vista general) ============ -->
+  <section id="aplicacion" class="pantalla">
+    <header class="barra-superior">
+      <div class="marca">
+        <span class="marca-icono">⚡</span>
+        <span class="marca-texto">BlinkDelivery</span>
+      </div>
+      <div class="barra-derecha">
+        <span class="estado-api" id="estado-api">Comprobando…</span>
+        <span class="usuario" id="usuario"></span>
+        <button type="button" class="enlace" id="btn-cambiar">Cambiar</button>
+      </div>
+    </header>
+
+    <div class="cuerpo">
+      <nav class="navegacion" id="navegacion" aria-label="Secciones"></nav>
+      <main class="vista" id="vista">
+        <div class="cargando">Cargando…</div>
+      </main>
+    </div>
+  </section>
+
+  <!-- ============ Modal para crear o editar registros ============ -->
+  <div class="modal-fondo" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <header class="modal-cabecera">
+        <h3 id="modal-titulo"></h3>
+        <button type="button" class="cerrar" id="modal-cerrar" aria-label="Cerrar">×</button>
+      </header>
+      <form id="modal-form" class="formulario-modal" autocomplete="off"></form>
+    </div>
   </div>
+
+  <div class="avisos" id="avisos" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>
