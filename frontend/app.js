@@ -1032,9 +1032,78 @@ $("modal-form").addEventListener("submit", async (e) => {
   }
 });
 
+// ================================================================ resplandor del cursor
+
+/**
+ * Resplandor morado que sigue al cursor con interpolación (lerp) en requestAnimationFrame.
+ * Solo responde al mouse: en táctil o sin movimiento queda el resplandor ambiental (.reposo).
+ * Las tarjetas de rol se iluminan según la cercanía del cursor (variable --prox en CSS).
+ */
+function iniciarResplandor() {
+  const halo = $("resplandor-halo");
+  const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const suavizado = 0.1;
+  let objetivo = { x: window.innerWidth / 2, y: window.innerHeight * 0.4 };
+  let actual = { ...objetivo };
+  let bucleActivo = false;
+
+  const pintar = () => {
+    halo.style.transform = `translate3d(${actual.x}px, ${actual.y}px, 0) translate(-50%, -50%)`;
+  };
+
+  const actualizarTarjetas = (x, y) => {
+    for (const tarjeta of document.querySelectorAll(".tarjeta-rol")) {
+      const r = tarjeta.getBoundingClientRect();
+      const dx = Math.max(r.left - x, 0, x - r.right);
+      const dy = Math.max(r.top - y, 0, y - r.bottom);
+      const prox = Math.max(0, 1 - Math.hypot(dx, dy) / 180);
+      tarjeta.style.setProperty("--prox", prox.toFixed(3));
+      tarjeta.style.setProperty("--mx", `${x - r.left}px`);
+      tarjeta.style.setProperty("--my", `${y - r.top}px`);
+    }
+  };
+
+  const tick = () => {
+    actual.x += (objetivo.x - actual.x) * suavizado;
+    actual.y += (objetivo.y - actual.y) * suavizado;
+    pintar();
+    actualizarTarjetas(objetivo.x, objetivo.y);
+    if (Math.abs(objetivo.x - actual.x) > 0.5 || Math.abs(objetivo.y - actual.y) > 0.5) {
+      requestAnimationFrame(tick);
+    } else {
+      bucleActivo = false;
+    }
+  };
+
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    halo.classList.remove("reposo");
+    objetivo = { x: e.clientX, y: e.clientY };
+    if (reducirMovimiento) {
+      actual = { ...objetivo };
+      pintar();
+      actualizarTarjetas(objetivo.x, objetivo.y);
+    } else if (!bucleActivo) {
+      bucleActivo = true;
+      requestAnimationFrame(tick);
+    }
+  }, { passive: true });
+
+  // Al salir de la ventana, las tarjetas dejan de iluminarse.
+  document.documentElement.addEventListener("mouseleave", () => {
+    for (const tarjeta of document.querySelectorAll(".tarjeta-rol")) {
+      tarjeta.style.setProperty("--prox", "0");
+    }
+  });
+
+  halo.classList.add("reposo");
+  pintar();
+}
+
 // ================================================================ arranque
 
 function iniciar() {
+  iniciarResplandor();
   document.querySelectorAll("[data-rol]").forEach((boton) => {
     boton.addEventListener("click", () => mostrarAcceso(boton.dataset.rol));
   });
