@@ -1,6 +1,7 @@
 package com.blinkdelivery.api;
 
 import com.blinkdelivery.dao.AddresFileDao;
+import com.blinkdelivery.dao.CredencialFileDao;
 import com.blinkdelivery.dao.CategoryFileDao;
 import com.blinkdelivery.dao.CustomerFileDao;
 import com.blinkdelivery.dao.DriverFileDao;
@@ -82,6 +83,7 @@ final class ApiRoutes {
     private final OrderFileDao pedidos = new OrderFileDao();
     private final OrderStatusHistoryFileDao historial = new OrderStatusHistoryFileDao();
     private final RatingFileDao calificaciones = new RatingFileDao();
+    private final CredencialFileDao credenciales = new CredencialFileDao();
 
     /**
      * @param metodo método HTTP en mayúsculas
@@ -112,8 +114,70 @@ final class ApiRoutes {
                 return pedidosRuta(metodo, seg);
             case "ratings":
                 return calificacionesRuta(metodo, seg, cuerpo);
+            case "auth":
+                return autenticacion(metodo, seg, cuerpo);
             default:
                 throw noEncontrado();
+        }
+    }
+
+    // ------------------------------------------------------------ autenticación
+
+    /**
+     * POST /api/auth/login  {rol, usuario, clave}: valida la contraseña del perfil.
+     * POST /api/auth/clave  {rol, usuario, clave}: establece la contraseña de un perfil existente que aún no la tiene.
+     * El rol es "cliente", "restaurante" o "domiciliario"; el usuario es la identificación (o el ID del restaurante).
+     */
+    private Respuesta autenticacion(String m, List<String> seg, String cuerpo) throws IOException {
+        if (seg.size() != 2) throw noEncontrado();
+        if (!m.equals("POST")) throw noPermitido();
+
+        Map<String, Object> d = Json.leerObjeto(cuerpo);
+        String rol = texto(d, "rol", true);
+        String usuario = texto(d, "usuario", true).trim();
+        String clave = texto(d, "clave", true);
+        if (usuario.isEmpty() || usuario.contains(";")) {
+            throw new IllegalArgumentException("El usuario no es válido.");
+        }
+
+        Map<String, Object> perfil = perfilDe(rol, usuario);
+        if (perfil == null) throw new ApiException(404, "No existe un perfil con ese ID.");
+        String[] cuenta = credenciales.buscar(rol, usuario);
+
+        switch (seg.get(1)) {
+            case "login":
+                if (cuenta == null) {
+                    throw new ApiException(409, "Este perfil aún no tiene contraseña. Usa «Crear cuenta» para establecerla.");
+                }
+                if (!Autenticacion.verificar(clave, cuenta[0], cuenta[1])) {
+                    throw new ApiException(401, "Usuario o contraseña incorrectos.");
+                }
+                return ok(perfil);
+            case "clave":
+                if (clave.length() < 6) throw new IllegalArgumentException("La contraseña debe tener al menos 6 caracteres.");
+                if (cuenta != null) throw conflicto("Este perfil ya tiene contraseña. Inicia sesión.");
+                String[] nueva = Autenticacion.cifrar(clave);
+                credenciales.guardar(rol, usuario, nueva[0], nueva[1]);
+                return creado(Map.of("ok", true));
+            default:
+                throw noEncontrado();
+        }
+    }
+
+    /** Perfil del rol indicado, o {@code null} si no existe. */
+    private Map<String, Object> perfilDe(String rol, String id) throws IOException {
+        switch (rol) {
+            case "cliente":
+                Customer c = clientes.buscarPorId(id);
+                return c == null ? null : aMapa(c);
+            case "restaurante":
+                Restaurant r = restaurantes.buscarPorId(id);
+                return r == null ? null : aMapa(r);
+            case "domiciliario":
+                DeliveryDriver dom = domiciliarios.buscarPorId(id);
+                return dom == null ? null : aMapa(dom);
+            default:
+                throw new IllegalArgumentException("Rol no válido: '" + rol + "'.");
         }
     }
 
