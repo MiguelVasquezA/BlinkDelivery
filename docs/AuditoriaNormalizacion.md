@@ -184,8 +184,9 @@ La DF `id_direccion → id_cliente` hace que `pedido` no esté en 3FN. Se decidi
 ### calificacion.id_cliente y calificacion.id_restaurante
 
 - Se derivan de: `pedido`, a través de `id_pedido`.
-- Por qué se guardan: en el EER son relaciones propias ("cliente emite", "restaurante recibe") y
-  permiten consultar las calificaciones de un restaurante sin pasar por `pedido`.
+- Por qué se guardan: en el EER la calificación solo se relaciona con el pedido ("pedido genera
+  calificación"); estas columnas son una copia para consultar las calificaciones de un cliente o
+  de un restaurante sin pasar por `pedido`.
 - Riesgo: que no coincidan con los del pedido (violaría RN12).
 - Control: los datos semilla lo cumplen; en la Entrega 3 lo validará el trigger de la RN12.
 
