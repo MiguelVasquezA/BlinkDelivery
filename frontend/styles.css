@@ -35,7 +35,7 @@
 /* ---------- Logo oficial (fondo blanco: se muestra sobre una tarjeta clara) ---------- */
 
 .logo-grande {
-  width: min(400px, 80vw);
+  width: min(320px, 70vw);
   height: auto;
   display: block;
   filter: drop-shadow(0 0 24px var(--acento-brillo));
