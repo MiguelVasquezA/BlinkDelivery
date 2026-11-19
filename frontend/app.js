@@ -91,7 +91,7 @@ const PESTANAS = {
   ],
 };
 
-const estado = { rol: null, perfil: null, pestana: null, filtroRestaurante: "" };
+const estado = { rol: null, perfil: null, pestana: null, filtroRestaurante: "", busqueda: "" };
 const cache = new Map();
 let nombresRestaurantes = new Map();
 let tokenRender = 0;
@@ -487,44 +487,118 @@ function leerFormulario(form, campos) {
 
 // ================================================================ vistas: cliente
 
+// ---------------------------------------------------------------- buscador y filtros (cliente)
+
+let datosExplorar = { restaurantes: [] };
+let datosMenu = { productos: [] };
+
+/** Texto en minúsculas y sin tildes, para comparar búsquedas. */
+function normalizar(texto) {
+  return String(texto ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+}
+
+function vistaActual() {
+  return estado.pestana === "menu" ? "menu" : "explorar";
+}
+
+/** Barra con buscador en tiempo real y, opcionalmente, un desplegable de restaurantes. */
+function barraFiltros({ vista, placeholder, restaurantes = null }) {
+  const buscador = `
+    <div class="buscador">
+      <span class="buscador-lupa" aria-hidden="true">🔍</span>
+      <input type="search" class="buscador-input" data-buscar="${vista}" value="${esc(estado.busqueda)}"
+             placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">
+      <button type="button" class="buscador-limpiar" data-accion="limpiar-busqueda"
+              aria-label="Borrar búsqueda" ${estado.busqueda ? "" : "hidden"}>✕</button>
+    </div>`;
+  if (!restaurantes) return `<div class="barra-filtros">${buscador}</div>`;
+
+  const opciones = [{ valor: "", etiqueta: "Todos los restaurantes" },
+    ...restaurantes.map((r) => ({ valor: r.id, etiqueta: r.nombre }))];
+  const actual = opciones.find((o) => o.valor === estado.filtroRestaurante) || opciones[0];
+  const desplegable = `
+    <div class="dropdown" data-cambio="filtro-restaurante">
+      <button type="button" class="dropdown-disparador" aria-haspopup="listbox" aria-expanded="false">
+        <span class="dropdown-texto">${esc(actual.etiqueta)}</span><span class="dropdown-flecha" aria-hidden="true">▾</span>
+      </button>
+      <div class="dropdown-panel" hidden>
+        <input type="search" class="dropdown-buscar" placeholder="Buscar restaurante…" aria-label="Buscar restaurante">
+        <ul class="dropdown-lista" role="listbox">
+          ${opciones.map((o) => `<li role="option" class="dropdown-opcion${o.valor === actual.valor ? " activa" : ""}"
+              data-valor="${esc(o.valor)}" aria-selected="${o.valor === actual.valor}">${esc(o.etiqueta)}</li>`).join("")}
+        </ul>
+      </div>
+    </div>`;
+  return `<div class="barra-filtros">${desplegable}${buscador}</div>`;
+}
+
+function sinResultados(hayDatos, vacioHtml) {
+  if (!hayDatos) return vacioHtml;
+  return vacio("🔎", "No se encontraron resultados", "Prueba con otras palabras o limpia los filtros.") +
+    `<div><button type="button" class="boton-secundario" data-accion="limpiar-filtros">Limpiar filtros</button></div>`;
+}
+
+function resultadosExplorarHtml() {
+  const q = normalizar(estado.busqueda);
+  const visibles = datosExplorar.restaurantes.filter((r) =>
+    !q || normalizar(`${r.nombre} ${r.tipoCocina}`).includes(q));
+  if (!visibles.length) {
+    return sinResultados(datosExplorar.restaurantes.length > 0,
+      vacio("🏪", "Aún no hay restaurantes", "Cuando se registren restaurantes aparecerán aquí."));
+  }
+  return rejilla(visibles.map((r) => `
+    <article class="tarjeta">
+      <h3>${esc(r.nombre)}</h3>
+      <p>${esc(r.tipoCocina)}</p>
+      <p>Horario: ${esc(r.horaApertura)} – ${esc(r.horaCierre)}</p>
+      <div class="pie">${insigniaAbierto(r.abierto)} ${estrellas(r.promedioCalificacion)} <span>${Number(r.promedioCalificacion || 0).toFixed(1)}</span></div>
+      <div class="pie"><button type="button" class="boton-secundario" data-accion="ver-menu" data-id="${esc(r.id)}">Ver menú</button></div>
+    </article>`));
+}
+
+function resultadosMenuHtml() {
+  const q = normalizar(estado.busqueda);
+  const visibles = datosMenu.productos.filter((p) =>
+    (!estado.filtroRestaurante || p.restauranteId === estado.filtroRestaurante) &&
+    (!q || normalizar(`${p.nombre} ${p.descripcion}`).includes(q)));
+  if (!visibles.length) {
+    return sinResultados(datosMenu.productos.length > 0,
+      vacio("🍽️", "No hay productos para mostrar", "Cuando los restaurantes publiquen su menú aparecerá aquí."));
+  }
+  return rejilla(visibles.map((p) => `
+    <article class="tarjeta">
+      <div class="pie"><h3>${esc(p.nombre)}</h3>${p.disponible ? insignia("Disponible", "ok") : insignia("Agotado", "peligro")}</div>
+      <p>${esc(p.descripcion)}</p>
+      <p>${esc(nombreRestaurante(p.restauranteId))}</p>
+      <div class="pie"><span class="precio">${moneda(p.precio)}</span></div>
+    </article>`));
+}
+
+/** Vuelve a pintar solo los resultados, sin recargar datos ni perder el foco del buscador. */
+function pintarResultados(vista) {
+  const contenedor = $(`resultados-${vista}`);
+  if (contenedor) contenedor.innerHTML = vista === "menu" ? resultadosMenuHtml() : resultadosExplorarHtml();
+  const limpiar = document.querySelector(".buscador-limpiar");
+  if (limpiar) limpiar.hidden = !estado.busqueda;
+}
+
 async function vistaExplorar() {
   const [restaurantes, categorias] = await Promise.all([obtenerRestaurantes(), api("GET", "/categories")]);
+  datosExplorar = { restaurantes };
   return cabecera("Explorar restaurantes", "Descubre dónde pedir y revisa sus calificaciones.") +
     (categorias.length
       ? `<div class="chips">${categorias.map((c) => `<span class="chip">${esc(c.nombre)}</span>`).join("")}</div>`
       : "") +
-    (restaurantes.length
-      ? rejilla(restaurantes.map((r) => `
-          <article class="tarjeta">
-            <h3>${esc(r.nombre)}</h3>
-            <p>${esc(r.tipoCocina)}</p>
-            <p>Horario: ${esc(r.horaApertura)} – ${esc(r.horaCierre)}</p>
-            <div class="pie">${insigniaAbierto(r.abierto)} ${estrellas(r.promedioCalificacion)} <span>${Number(r.promedioCalificacion || 0).toFixed(1)}</span></div>
-            <div class="pie"><button type="button" class="boton-secundario" data-accion="ver-menu" data-id="${esc(r.id)}">Ver menú</button></div>
-          </article>`))
-      : vacio("🏪", "Aún no hay restaurantes", "Cuando se registren restaurantes aparecerán aquí."));
+    barraFiltros({ vista: "explorar", placeholder: "Buscar restaurante o tipo de cocina…" }) +
+    `<div id="resultados-explorar">${resultadosExplorarHtml()}</div>`;
 }
 
 async function vistaMenu() {
-  const [productos] = await Promise.all([api("GET", "/products"), obtenerRestaurantes()]);
-  const filtro = estado.filtroRestaurante;
-  const visibles = filtro ? productos.filter((p) => p.restauranteId === filtro) : productos;
-  const restaurantes = [...nombresRestaurantes.entries()];
-  const selector = `<select data-cambio="filtro-restaurante">
-      <option value="">Todos los restaurantes</option>
-      ${restaurantes.map(([id, nombre]) => `<option value="${esc(id)}" ${id === filtro ? "selected" : ""}>${esc(nombre)}</option>`).join("")}
-    </select>`;
-
-  return cabecera("Menú y productos", "Platos disponibles por restaurante.", selector) +
-    (visibles.length
-      ? rejilla(visibles.map((p) => `
-          <article class="tarjeta">
-            <div class="pie"><h3>${esc(p.nombre)}</h3>${p.disponible ? insignia("Disponible", "ok") : insignia("Agotado", "peligro")}</div>
-            <p>${esc(p.descripcion)}</p>
-            <p>${esc(nombreRestaurante(p.restauranteId))}</p>
-            <div class="pie"><span class="precio">${moneda(p.precio)}</span></div>
-          </article>`))
-      : vacio("🍽️", "No hay productos para mostrar", filtro ? "Este restaurante aún no tiene productos registrados." : "Cuando los restaurantes publiquen su menú aparecerá aquí."));
+  const [productos, restaurantes] = await Promise.all([api("GET", "/products"), obtenerRestaurantes()]);
+  datosMenu = { productos };
+  return cabecera("Menú y productos", "Platos disponibles por restaurante.") +
+    barraFiltros({ vista: "menu", placeholder: "Buscar plato o descripción…", restaurantes }) +
+    `<div id="resultados-menu">${resultadosMenuHtml()}</div>`;
 }
 
 async function vistaPedidosCliente() {
@@ -945,16 +1019,72 @@ async function vistaGeneral() {
 
 // ================================================================ acciones (delegación de eventos)
 
+// ---------------------------------------------------------------- desplegable personalizado
+
+function cerrarDropdowns() {
+  for (const drop of document.querySelectorAll(".dropdown")) {
+    drop.querySelector(".dropdown-panel").hidden = true;
+    drop.querySelector(".dropdown-disparador").setAttribute("aria-expanded", "false");
+    drop.classList.remove("abierto");
+  }
+}
+
+function alternarDropdown(drop) {
+  const panel = drop.querySelector(".dropdown-panel");
+  const abrir = panel.hidden;
+  cerrarDropdowns();
+  if (!abrir) return;
+  panel.hidden = false;
+  drop.classList.add("abierto");
+  drop.querySelector(".dropdown-disparador").setAttribute("aria-expanded", "true");
+  drop.querySelector(".dropdown-buscar").focus();
+}
+
+function seleccionarDropdown(drop, valor) {
+  cerrarDropdowns();
+  if (drop.dataset.cambio !== "filtro-restaurante") return;
+  const opciones = [...drop.querySelectorAll(".dropdown-opcion")];
+  const elegida = opciones.find((li) => li.dataset.valor === valor) || opciones[0];
+  for (const li of opciones) {
+    const activa = li === elegida;
+    li.classList.toggle("activa", activa);
+    li.setAttribute("aria-selected", String(activa));
+  }
+  drop.querySelector(".dropdown-texto").textContent = elegida.textContent;
+  estado.filtroRestaurante = elegida.dataset.valor;
+  pintarResultados("menu");
+}
+
+function filtrarOpcionesDropdown(input) {
+  const q = normalizar(input.value);
+  for (const li of input.closest(".dropdown").querySelectorAll(".dropdown-opcion")) {
+    li.hidden = !normalizar(li.textContent).includes(q);
+  }
+}
+
 const ACCIONES = {
   "ir-pestana": (d) => {
     estado.pestana = d.pestana;
+    estado.busqueda = "";
     renderNav();
     renderVista();
   },
   "ver-menu": (d) => {
     estado.filtroRestaurante = d.id;
+    estado.busqueda = "";
     estado.pestana = "menu";
     renderNav();
+    renderVista();
+  },
+  "limpiar-busqueda": () => {
+    estado.busqueda = "";
+    const input = document.querySelector(".buscador-input");
+    if (input) input.value = "";
+    pintarResultados(vistaActual());
+  },
+  "limpiar-filtros": () => {
+    estado.busqueda = "";
+    estado.filtroRestaurante = "";
     renderVista();
   },
   reintentar: () => renderVista(),
@@ -976,6 +1106,18 @@ const ACCIONES = {
 };
 
 document.addEventListener("click", (e) => {
+  const opcion = e.target.closest(".dropdown-opcion");
+  if (opcion) {
+    seleccionarDropdown(opcion.closest(".dropdown"), opcion.dataset.valor);
+    return;
+  }
+  const disparador = e.target.closest(".dropdown-disparador");
+  if (disparador) {
+    alternarDropdown(disparador.closest(".dropdown"));
+    return;
+  }
+  if (!e.target.closest(".dropdown")) cerrarDropdowns();
+
   const cerrar = e.target.closest("[data-cerrar-modal]");
   if (cerrar || e.target.id === "modal-cerrar" || e.target === $("modal")) {
     cerrarModal();
@@ -998,15 +1140,21 @@ document.addEventListener("click", (e) => {
   }
 });
 
-document.addEventListener("change", (e) => {
-  if (e.target.dataset && e.target.dataset.cambio === "filtro-restaurante") {
-    estado.filtroRestaurante = e.target.value;
-    renderVista();
+// Búsqueda en tiempo real: filtra las tarjetas sin recargar datos.
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset && t.dataset.buscar) {
+    estado.busqueda = t.value;
+    pintarResultados(t.dataset.buscar);
+  } else if (t.classList.contains("dropdown-buscar")) {
+    filtrarOpcionesDropdown(t);
   }
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("modal").hidden) cerrarModal();
+  if (e.key !== "Escape") return;
+  if (!$("modal").hidden) cerrarModal();
+  cerrarDropdowns();
 });
 
 $("modal-form").addEventListener("submit", async (e) => {
