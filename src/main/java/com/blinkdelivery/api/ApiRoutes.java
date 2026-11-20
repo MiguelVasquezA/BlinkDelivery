@@ -17,13 +17,17 @@ import com.blinkdelivery.modelo.DeliveryDriver;
 import com.blinkdelivery.modelo.DriverStatus;
 import com.blinkdelivery.modelo.Order;
 import com.blinkdelivery.modelo.OrderItem;
+import com.blinkdelivery.modelo.OrderStatus;
 import com.blinkdelivery.modelo.OrderStatusChange;
 import com.blinkdelivery.modelo.Product;
 import com.blinkdelivery.modelo.Rating;
 import com.blinkdelivery.modelo.Restaurant;
+import com.blinkdelivery.service.OrderService;
+import com.blinkdelivery.service.RatingService;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,13 +53,14 @@ import java.util.function.Function;
  * GET    /api/categories/{id}
  * GET    /api/drivers                        POST /api/drivers
  * GET    /api/drivers/{id}                   PUT  /api/drivers/{id}
- * GET    /api/orders                         GET  /api/orders/{id}
+ * GET    /api/orders                         POST /api/orders
+ * GET    /api/orders/{id}                    PUT  /api/orders/{id}/estado
  * GET    /api/orders/{id}/history
  * GET    /api/ratings                        POST /api/ratings
  * </pre>
  *
- * Los pedidos no se crean por esta API: un {@code Order} requiere reglas de negocio de
- * {@code OrderService}, que este módulo no expone todavía.
+ * Los pedidos y las calificaciones pasan por {@code OrderService} y {@code RatingService},
+ * así que se aplican las mismas reglas de negocio que en la consola (RN09, RN12, RN27, etc.).
  */
 final class ApiRoutes {
 
@@ -84,6 +89,8 @@ final class ApiRoutes {
     private final OrderStatusHistoryFileDao historial = new OrderStatusHistoryFileDao();
     private final RatingFileDao calificaciones = new RatingFileDao();
     private final CredencialFileDao credenciales = new CredencialFileDao();
+    private final OrderService servicioPedidos = new OrderService();
+    private final RatingService servicioCalificaciones = new RatingService();
 
     /**
      * @param metodo método HTTP en mayúsculas
@@ -111,7 +118,7 @@ final class ApiRoutes {
             case "drivers":
                 return domiciliarios(metodo, seg, cuerpo);
             case "orders":
-                return pedidosRuta(metodo, seg);
+                return pedidosRuta(metodo, seg, cuerpo);
             case "ratings":
                 return calificacionesRuta(metodo, seg, cuerpo);
             case "auth":
@@ -246,7 +253,7 @@ final class ApiRoutes {
 
     private Respuesta restaurantes(String m, List<String> seg, String cuerpo) throws IOException {
         if (seg.size() == 1) {
-            if (m.equals("GET")) return ok(mapear(restaurantes.listar(), ApiRoutes::aMapa));
+            if (m.equals("GET")) return ok(restaurantesConPromedio(restaurantes.listar()));
             if (m.equals("POST")) {
                 Map<String, Object> d = Json.leerObjeto(cuerpo);
                 String id = texto(d, "id", true);
@@ -265,7 +272,7 @@ final class ApiRoutes {
         }
         Restaurant actual = restaurantes.buscarPorId(seg.get(1));
         if (seg.size() == 2) {
-            if (m.equals("GET")) return ok(aMapa(existe(actual, "restaurante", seg.get(1))));
+            if (m.equals("GET")) return ok(restaurantesConPromedio(List.of(existe(actual, "restaurante", seg.get(1)))).get(0));
             if (m.equals("PUT")) {
                 existe(actual, "restaurante", seg.get(1));
                 Map<String, Object> d = Json.leerObjeto(cuerpo);
@@ -305,6 +312,27 @@ final class ApiRoutes {
             }
         }
         throw noEncontrado();
+    }
+
+    /**
+     * Mapea restaurantes calculando {@code promedioCalificacion} a partir de las calificaciones
+     * guardadas (el campo del modelo no se actualiza al registrar calificaciones).
+     */
+    private List<Map<String, Object>> restaurantesConPromedio(List<Restaurant> lista) throws IOException {
+        Map<String, List<Integer>> notas = new HashMap<>();
+        for (Rating r : calificaciones.listar()) {
+            notas.computeIfAbsent(r.getRestaurantId(), k -> new ArrayList<>()).add(r.getEstrellas());
+        }
+        List<Map<String, Object>> salida = new ArrayList<>();
+        for (Restaurant r : lista) {
+            Map<String, Object> mapa = aMapa(r);
+            List<Integer> valores = notas.getOrDefault(r.getId(), List.of());
+            double promedio = valores.isEmpty() ? 0.0
+                    : valores.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            mapa.put("promedioCalificacion", promedio);
+            salida.add(mapa);
+        }
+        return salida;
     }
 
     // ------------------------------------------------------------ productos
@@ -409,37 +437,92 @@ final class ApiRoutes {
         throw noEncontrado();
     }
 
-    // ------------------------------------------------------------ pedidos (solo lectura)
+    // ------------------------------------------------------------ pedidos
 
-    private Respuesta pedidosRuta(String m, List<String> seg) throws IOException {
-        if (!m.equals("GET")) throw noPermitido();
-        if (seg.size() == 1) return ok(mapear(pedidos.listar(), ApiRoutes::aMapa));
-        if (seg.size() == 2) return ok(aMapa(existe(pedidos.buscarPorId(seg.get(1)), "pedido", seg.get(1))));
+    private Respuesta pedidosRuta(String m, List<String> seg, String cuerpo) throws IOException {
+        if (seg.size() == 1) {
+            if (m.equals("GET")) return ok(mapear(pedidos.listar(), ApiRoutes::aMapa));
+            if (m.equals("POST")) return creado(aMapa(crearPedido(Json.leerObjeto(cuerpo))));
+            throw noPermitido();
+        }
+        if (seg.size() == 2) {
+            if (!m.equals("GET")) throw noPermitido();
+            return ok(aMapa(existe(pedidos.buscarPorId(seg.get(1)), "pedido", seg.get(1))));
+        }
         if (seg.size() == 3 && seg.get(2).equals("history")) {
+            if (!m.equals("GET")) throw noPermitido();
             existe(pedidos.buscarPorId(seg.get(1)), "pedido", seg.get(1));
             return ok(mapear(historial.listarPorPedido(seg.get(1)), ApiRoutes::aMapa));
+        }
+        if (seg.size() == 3 && seg.get(2).equals("estado")) {
+            if (!m.equals("PUT")) throw noPermitido();
+            return ok(aMapa(cambiarEstado(seg.get(1), Json.leerObjeto(cuerpo))));
         }
         throw noEncontrado();
     }
 
+    /**
+     * POST /api/orders {clienteId, restauranteId, direccionId?, items: [{productoId, cantidad}]}.
+     * Si no se envía {@code direccionId}, el pedido se entrega en la dirección principal del cliente.
+     */
+    private Order crearPedido(Map<String, Object> d) throws IOException {
+        return servicioPedidos.crearPedido(texto(d, "clienteId", true), texto(d, "restauranteId", true),
+                texto(d, "direccionId", false), lineasPedido(d));
+    }
+
+    /** Convierte el arreglo {@code items} en un mapa id de producto → cantidad. */
+    private static Map<String, Integer> lineasPedido(Map<String, Object> d) {
+        if (!(d.get("items") instanceof List<?> lista) || lista.isEmpty()) {
+            throw new IllegalArgumentException("El pedido debe incluir al menos un producto en 'items'.");
+        }
+        Map<String, Integer> productos = new LinkedHashMap<>();
+        for (Object elemento : lista) {
+            if (!(elemento instanceof Map<?, ?> linea)) {
+                throw new IllegalArgumentException("Cada producto de 'items' debe ser un objeto.");
+            }
+            if (!(linea.get("productoId") instanceof String idProducto)) {
+                throw new IllegalArgumentException("Cada producto necesita 'productoId' de texto.");
+            }
+            if (!(linea.get("cantidad") instanceof Double cantidad) || cantidad != Math.floor(cantidad)) {
+                throw new IllegalArgumentException("La cantidad de '" + idProducto + "' debe ser un número entero.");
+            }
+            productos.merge(idProducto, cantidad.intValue(), Integer::sum);
+        }
+        return productos;
+    }
+
+    /**
+     * PUT /api/orders/{id}/estado {estado}. Valida la transición con {@code OrderService}.
+     * Al pasar a "En camino" sin domiciliario, asigna el primero disponible (RN10).
+     */
+    private Order cambiarEstado(String idPedido, Map<String, Object> d) throws IOException {
+        OrderStatus destino = OrderStatus.desdeTexto(texto(d, "estado", true));
+        Order actual = existe(servicioPedidos.buscarPorId(idPedido), "pedido", idPedido);
+        if (destino == OrderStatus.EN_CAMINO && !actual.tieneDomiciliario()
+                && actual.getEstado().puedeCambiarA(destino)) {
+            servicioPedidos.asignarDomiciliarioAutomatico(idPedido);
+        }
+        return servicioPedidos.cambiarEstado(idPedido, destino);
+    }
+
     // ------------------------------------------------------------ calificaciones
 
+    /**
+     * POST /api/ratings {pedidoId, clienteId, estrellas, comentario?}. El id y el restaurante
+     * se calculan en el servidor; las reglas RN12 (pedido entregado, del propio cliente,
+     * una sola calificación) las aplica {@code RatingService}.
+     */
     private Respuesta calificacionesRuta(String m, List<String> seg, String cuerpo) throws IOException {
         if (seg.size() == 1) {
             if (m.equals("GET")) return ok(mapear(calificaciones.listar(), ApiRoutes::aMapa));
             if (m.equals("POST")) {
                 Map<String, Object> d = Json.leerObjeto(cuerpo);
-                String id = texto(d, "id", true);
-                if (calificaciones.listar().stream().anyMatch(r -> r.getId().equalsIgnoreCase(id))) {
-                    throw conflicto("Ya existe una calificacion con id " + id + ".");
-                }
                 double estrellas = numero(d, "estrellas");
                 if (estrellas != Math.floor(estrellas)) {
                     throw new IllegalArgumentException("Las estrellas deben ser un número entero.");
                 }
-                Rating r = new Rating(id, texto(d, "pedidoId", true), texto(d, "clienteId", true),
-                        texto(d, "restauranteId", true), (int) estrellas, texto(d, "comentario", false));
-                calificaciones.guardar(r);
+                Rating r = servicioCalificaciones.registrarCalificacion(texto(d, "pedidoId", true),
+                        texto(d, "clienteId", true), (int) estrellas, texto(d, "comentario", false));
                 return creado(aMapa(r));
             }
             throw noPermitido();

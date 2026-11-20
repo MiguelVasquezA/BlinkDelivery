@@ -83,6 +83,9 @@ public final class ApiServer {
             enviar(intercambio, e.estado, Map.of("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
             enviar(intercambio, 400, Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            // Regla de negocio no cumplida (restaurante cerrado, transición no permitida, etc.).
+            enviar(intercambio, 409, Map.of("error", e.getMessage()));
         } catch (IOException e) {
             System.err.println("Error de archivos: " + e);
             enviar(intercambio, 500, Map.of("error", "Error al acceder a los datos."));
