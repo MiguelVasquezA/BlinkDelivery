@@ -1,2 +1,20 @@
 1111;111;crazy roll skin;sushi con borde tempura, queso crema, salsas de la casa, con un toping de camarones;28000.0;true
 2222;111;bombastic;rollo tempura, con un toping de camarones tempura, queso crema, aguacate, arroz;30000.0;true
+PRD-111-1;111;gyoza de cerdo;seis unidades al vapor con salsa ponzu;18000.0;true
+PRD-111-2;111;ramen tonkotsu;caldo de cerdo cocido 12 horas, huevo marinado y cebollin;26000.0;true
+PRD-112-1;112;pizza margarita;tomate San Marzano, mozzarella fresca y albahaca;32000.0;true
+PRD-112-2;112;pizza pepperoni;mozzarella, pepperoni y oregano;36000.0;true
+PRD-112-3;112;lasana bolonesa;capas de pasta fresca, ragu de res y bechamel;29000.0;true
+PRD-112-4;112;tiramisu;postre de cafe, mascarpone y cacao;14000.0;true
+PRD-113-1;113;churrasco a la parrilla;300 g de res con papas criollas y ensalada;42000.0;true
+PRD-113-2;113;costillas BBQ;medio rack con salsa BBQ ahumada;38000.0;true
+PRD-113-3;113;chorizo santarrosano;chorizo artesanal con arepa y aji;19000.0;true
+PRD-113-4;113;limonada de panela;limonada natural con panela;7000.0;true
+PRD-114-1;114;tacos al pastor;tres tacos de cerdo marinado con pina y cilantro;21000.0;true
+PRD-114-2;114;burrito de res;tortilla de harina, frijoles, arroz y queso;24000.0;true
+PRD-114-3;114;quesadilla de champinones;queso oaxaca y champinones salteados;17000.0;true
+PRD-114-4;114;horchata;bebida de arroz con canela;6000.0;false
+PRD-115-1;115;hamburguesa clasica;carne de 150 g, queso cheddar, lechuga y tomate;22000.0;true
+PRD-115-2;115;hamburguesa doble;dos carnes de 150 g, tocineta y salsa de la casa;31000.0;true
+PRD-115-3;115;papas en cascos;papas con sazonador y salsa de ajo;11000.0;true
+PRD-115-4;115;malteada de vainilla;helado de vainilla y leche;12000.0;true

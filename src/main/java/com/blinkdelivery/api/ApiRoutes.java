@@ -5,6 +5,7 @@ import com.blinkdelivery.dao.CredencialFileDao;
 import com.blinkdelivery.dao.CategoryFileDao;
 import com.blinkdelivery.dao.CustomerFileDao;
 import com.blinkdelivery.dao.DriverFileDao;
+import com.blinkdelivery.dao.GuiaPedidoFileDao;
 import com.blinkdelivery.dao.OrderFileDao;
 import com.blinkdelivery.dao.OrderStatusHistoryFileDao;
 import com.blinkdelivery.dao.ProductFileDao;
@@ -55,7 +56,8 @@ import java.util.function.Function;
  * GET    /api/drivers/{id}                   PUT  /api/drivers/{id}
  * GET    /api/orders                         POST /api/orders
  * GET    /api/orders/{id}                    PUT  /api/orders/{id}/estado
- * GET    /api/orders/{id}/history
+ * PUT    /api/orders/{id}/domiciliario       GET  /api/orders/{id}/history
+ * PUT    /api/orders/{id}/guia
  * GET    /api/ratings                        POST /api/ratings
  * </pre>
  *
@@ -89,6 +91,7 @@ final class ApiRoutes {
     private final OrderStatusHistoryFileDao historial = new OrderStatusHistoryFileDao();
     private final RatingFileDao calificaciones = new RatingFileDao();
     private final CredencialFileDao credenciales = new CredencialFileDao();
+    private final GuiaPedidoFileDao guias = new GuiaPedidoFileDao();
     private final OrderService servicioPedidos = new OrderService();
     private final RatingService servicioCalificaciones = new RatingService();
 
@@ -441,13 +444,20 @@ final class ApiRoutes {
 
     private Respuesta pedidosRuta(String m, List<String> seg, String cuerpo) throws IOException {
         if (seg.size() == 1) {
-            if (m.equals("GET")) return ok(mapear(pedidos.listar(), ApiRoutes::aMapa));
-            if (m.equals("POST")) return creado(aMapa(crearPedido(Json.leerObjeto(cuerpo))));
+            if (m.equals("GET")) return ok(pedidosMapa(pedidos.listar()));
+            if (m.equals("POST")) return creado(pedidoMapa(crearPedido(Json.leerObjeto(cuerpo))));
             throw noPermitido();
         }
         if (seg.size() == 2) {
             if (!m.equals("GET")) throw noPermitido();
-            return ok(aMapa(existe(pedidos.buscarPorId(seg.get(1)), "pedido", seg.get(1))));
+            return ok(pedidoMapa(existe(pedidos.buscarPorId(seg.get(1)), "pedido", seg.get(1))));
+        }
+        if (seg.size() == 3 && seg.get(2).equals("guia")) {
+            // El domiciliario asignado actualiza la guía de seguimiento (texto libre).
+            if (!m.equals("PUT")) throw noPermitido();
+            Map<String, Object> d = Json.leerObjeto(cuerpo);
+            servicioPedidos.actualizarGuia(seg.get(1), texto(d, "guia", false));
+            return ok(pedidoMapa(existe(pedidos.buscarPorId(seg.get(1)), "pedido", seg.get(1))));
         }
         if (seg.size() == 3 && seg.get(2).equals("history")) {
             if (!m.equals("GET")) throw noPermitido();
@@ -456,9 +466,32 @@ final class ApiRoutes {
         }
         if (seg.size() == 3 && seg.get(2).equals("estado")) {
             if (!m.equals("PUT")) throw noPermitido();
-            return ok(aMapa(cambiarEstado(seg.get(1), Json.leerObjeto(cuerpo))));
+            return ok(pedidoMapa(cambiarEstado(seg.get(1), Json.leerObjeto(cuerpo))));
+        }
+        if (seg.size() == 3 && seg.get(2).equals("domiciliario")) {
+            // El domiciliario toma un pedido "Listo para entregar" sin repartidor; OrderService valida
+            // el estado y que el domiciliario esté disponible (RN10, RN11).
+            if (!m.equals("PUT")) throw noPermitido();
+            Map<String, Object> d = Json.leerObjeto(cuerpo);
+            return ok(pedidoMapa(servicioPedidos.asignarDomiciliario(seg.get(1), texto(d, "domiciliarioId", true))));
         }
         throw noEncontrado();
+    }
+
+    /** Pedidos en formato JSON, con la guía de seguimiento de cada uno. */
+    private List<Map<String, Object>> pedidosMapa(List<Order> lista) throws IOException {
+        Map<String, String> guiaPorPedido = guias.listar();
+        List<Map<String, Object>> salida = new ArrayList<>();
+        for (Order o : lista) {
+            Map<String, Object> mapa = aMapa(o);
+            mapa.put("guia", guiaPorPedido.get(o.getId()));
+            salida.add(mapa);
+        }
+        return salida;
+    }
+
+    private Map<String, Object> pedidoMapa(Order o) throws IOException {
+        return pedidosMapa(List.of(o)).get(0);
     }
 
     /**
@@ -573,8 +606,11 @@ final class ApiRoutes {
                     "cantidad", it.getCantidad(), "subtotal", it.getSubtotal()));
         }
         Address entrega = o.getDireccionEntrega();
+        DeliveryDriver dom = o.tieneDomiciliario() ? o.getDomiciliario() : null;
         return campos("id", o.getId(), "clienteId", o.getCustomerId(), "restauranteId", o.getRestaurantId(),
                 "estado", o.getEstado().name(), "fechaHora", String.valueOf(o.getFechaHora()),
+                "domiciliarioId", dom == null ? null : dom.getIdentification(),
+                "domiciliarioNombre", dom == null ? null : dom.getNombre(),
                 "direccionEntrega", entrega == null ? null : entrega.getDireccionExacta(),
                 "items", items, "subtotal", o.getSubtotal(), "comisionPlataforma", o.getComisionPlataforma(),
                 "total", o.getTotal());

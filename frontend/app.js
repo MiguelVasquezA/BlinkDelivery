@@ -9,7 +9,7 @@ const ESTADOS_PEDIDO = {
   RECIBIDO: { texto: "Recibido", tipo: "aviso" },
   ACEPTADO: { texto: "Aceptado", tipo: "acento" },
   EN_PREPARACION: { texto: "En preparación", tipo: "aviso" },
-  LISTO_PARA_RECOGER: { texto: "Listo para recoger", tipo: "acento" },
+  LISTO_PARA_ENTREGAR: { texto: "Listo para entregar", tipo: "acento" },
   EN_CAMINO: { texto: "En camino", tipo: "acento" },
   ENTREGADO: { texto: "Entregado", tipo: "ok" },
   CANCELADO: { texto: "Cancelado", tipo: "peligro" },
@@ -85,7 +85,7 @@ const PESTANAS = {
     { id: "datos", icono: "🏪", texto: "Datos del restaurante", vista: () => vistaDatosRestaurante() },
   ],
   domiciliario: [
-    { id: "entregas", icono: "🛵", texto: "Entregas disponibles", vista: () => vistaEntregas() },
+    { id: "entregas", icono: "🛵", texto: "Entregas", vista: () => vistaEntregas() },
     { id: "calificaciones", icono: "⭐", texto: "Mis calificaciones", vista: () => vistaCalificacionesDomiciliario() },
     { id: "perfil", icono: "👤", texto: "Mi perfil", vista: () => vistaPerfilDomiciliario() },
   ],
@@ -788,8 +788,10 @@ async function vistaPedidosCliente() {
           <article class="tarjeta">
             <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
             <p>${esc(nombreRestaurante(o.restauranteId))}</p>
-            <p>${o.items.map((i) => `${i.cantidad} × ${esc(i.nombre)}`).join("<br>")}</p>
+            <p>${productosHtml(o)}</p>
             <p>Entrega: ${esc(o.direccionEntrega || "—")}</p>
+            ${o.domiciliarioNombre ? `<p>Domiciliario: ${esc(o.domiciliarioNombre)}</p>` : ""}
+            ${o.guia ? `<p>Guía de seguimiento: ${esc(o.guia)}</p>` : ""}
             <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
             ${pie ? `<div class="pie">${pie}</div>` : ""}
           </article>`;
@@ -1031,13 +1033,14 @@ async function accionQuitarCategoria(d) {
   renderVista();
 }
 
-/** Siguiente estado en el ciclo de vida de un pedido (las transiciones las valida la API). */
-const SIGUIENTE_ESTADO = {
-  RECIBIDO: "ACEPTADO",
-  ACEPTADO: "EN_PREPARACION",
-  EN_PREPARACION: "LISTO_PARA_RECOGER",
-  LISTO_PARA_RECOGER: "EN_CAMINO",
-  EN_CAMINO: "ENTREGADO",
+/**
+ * Lo que el restaurante puede hacer con un pedido: solo avanza hasta LISTO_PARA_ENTREGAR.
+ * Después de eso el envío es responsabilidad del domiciliario.
+ */
+const ACCION_RESTAURANTE = {
+  RECIBIDO: { destino: "ACEPTADO", texto: "Aceptar pedido" },
+  ACEPTADO: { destino: "EN_PREPARACION", texto: "Empezar preparación" },
+  EN_PREPARACION: { destino: "LISTO_PARA_ENTREGAR", texto: "Marcar listo para entregar" },
 };
 
 async function vistaPedidosRestaurante() {
@@ -1046,12 +1049,15 @@ async function vistaPedidosRestaurante() {
   return cabecera("Pedidos recibidos", "Pedidos de tu restaurante y su avance.") +
     (mios.length
       ? tablaHtml(["Pedido", "Cliente", "Estado", "Fecha", "Total", "Avanzar"], mios.map((o) => {
-          const siguiente = SIGUIENTE_ESTADO[o.estado];
-          const accion = siguiente
-            ? `<button type="button" class="boton-secundario" data-accion="avanzar-pedido" data-id="${esc(o.id)}"
-                 data-estado="${siguiente}">${esc(ESTADOS_PEDIDO[siguiente].texto)}</button>`
-            : "—";
-          return [esc(o.id), esc(o.clienteId), insigniaEstado(o.estado), fecha(o.fechaHora), moneda(o.total), accion];
+          const accion = ACCION_RESTAURANTE[o.estado];
+          let celda = "—";
+          if (accion) {
+            celda = `<button type="button" class="boton-secundario" data-accion="avanzar-pedido" data-id="${esc(o.id)}"
+                 data-estado="${accion.destino}">${esc(accion.texto)}</button>`;
+          } else if (o.estado === "LISTO_PARA_ENTREGAR") {
+            celda = `<span class="ayuda">Esperando domiciliario</span>`;
+          }
+          return [esc(o.id), esc(o.clienteId), insigniaEstado(o.estado), fecha(o.fechaHora), moneda(o.total), celda];
         }))
       : vacio("📦", "Aún no hay pedidos", "Cuando lleguen pedidos a tu restaurante aparecerán aquí."));
 }
@@ -1093,22 +1099,72 @@ function accionEditarRestaurante() {
 
 // ================================================================ vistas: domiciliario
 
+/** Productos de un pedido en una lista corta para las tarjetas del domiciliario. */
+function productosHtml(o) {
+  return o.items.map((i) => `${i.cantidad} × ${esc(i.nombre)}`).join("<br>");
+}
+
+/** Pedido listo para entregar que aún no tiene domiciliario: el domiciliario puede tomarlo. */
+function tarjetaDisponibleHtml(o, puedeTomar) {
+  return `
+    <article class="tarjeta">
+      <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
+      <p>Recoger en: ${esc(nombreRestaurante(o.restauranteId))}</p>
+      <p>Entregar en: ${esc(o.direccionEntrega || "—")}</p>
+      <p>${productosHtml(o)}</p>
+      <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
+      <div class="pie">
+        <button type="button" class="boton-primario" data-accion="tomar-pedido" data-id="${esc(o.id)}"
+          ${puedeTomar ? "" : "disabled"}>Tomar pedido</button>
+      </div>
+    </article>`;
+}
+
+/** Pedido asignado a este domiciliario: guía de seguimiento y avance hasta ENTREGADO. */
+function tarjetaEntregaHtml(o) {
+  const siguiente = o.estado === "EN_CAMINO"
+    ? { destino: "ENTREGADO", texto: "Marcar como entregado" }
+    : { destino: "EN_CAMINO", texto: "Salir a entrega" };
+  return `
+    <article class="tarjeta">
+      <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
+      <p>Recoger en: ${esc(nombreRestaurante(o.restauranteId))}</p>
+      <p>Entregar en: ${esc(o.direccionEntrega || "—")}</p>
+      <p>${productosHtml(o)}</p>
+      <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
+      <label class="ayuda" for="guia-${esc(o.id)}">Guía de seguimiento</label>
+      <div class="pie">
+        <input type="text" id="guia-${esc(o.id)}" value="${esc(o.guia || "")}" maxlength="120"
+          placeholder="Número de guía o nota de ubicación">
+        <button type="button" class="boton-secundario" data-accion="guardar-guia" data-id="${esc(o.id)}">Actualizar guía</button>
+      </div>
+      <div class="pie">
+        <button type="button" class="boton-primario" data-accion="avanzar-pedido" data-id="${esc(o.id)}"
+          data-estado="${siguiente.destino}">${esc(siguiente.texto)}</button>
+      </div>
+    </article>`;
+}
+
 async function vistaEntregas() {
-  const [pedidos] = await Promise.all([api("GET", "/orders"), obtenerRestaurantes()]);
-  const disponibles = pedidos
-    .filter((o) => o.estado === "LISTO_PARA_RECOGER" || o.estado === "EN_CAMINO")
+  const yo = estado.perfil.identificacion;
+  const [pedidos, driver] = await Promise.all([api("GET", "/orders"), api("GET", `/drivers/${enc(yo)}`), obtenerRestaurantes()]);
+  estado.perfil = driver;
+  const libres = pedidos.filter((o) => o.estado === "LISTO_PARA_ENTREGAR" && !o.domiciliarioId).sort(porFechaDesc);
+  const mias = pedidos
+    .filter((o) => o.domiciliarioId === yo && (o.estado === "LISTO_PARA_ENTREGAR" || o.estado === "EN_CAMINO"))
     .sort(porFechaDesc);
-  return cabecera("Entregas disponibles", "Pedidos listos para recoger o en camino.") +
-    `<p class="ayuda">La asignación de pedidos a domiciliarios todavía no está disponible en la API; aquí solo se consultan.</p>` +
-    (disponibles.length
-      ? rejilla(disponibles.map((o) => `
-          <article class="tarjeta">
-            <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
-            <p>Recoger en: ${esc(nombreRestaurante(o.restauranteId))}</p>
-            <p>Entregar en: ${esc(o.direccionEntrega || "—")}</p>
-            <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
-          </article>`))
-      : vacio("🛵", "No hay entregas disponibles", "Cuando un pedido esté listo para recoger aparecerá aquí."));
+  const puedeTomar = driver.estado === "DISPONIBLE" && mias.length === 0;
+
+  return cabecera("Entregas", "Toma pedidos listos para entregar y actualiza su avance.") +
+    `<h3>Mi entrega actual</h3>` +
+    (mias.length
+      ? rejilla(mias.map(tarjetaEntregaHtml))
+      : vacio("🛵", "No tienes entregas en curso", "Cuando tomes un pedido aparecerá aquí.")) +
+    `<h3>Pedidos disponibles</h3>` +
+    (puedeTomar ? "" : `<p class="ayuda">Solo puedes tomar un pedido a la vez y cuando tu estado sea «Disponible» (ahora: ${esc(driver.estado)}).</p>`) +
+    (libres.length
+      ? rejilla(libres.map((o) => tarjetaDisponibleHtml(o, puedeTomar)))
+      : vacio("🛵", "No hay pedidos para entregar", "Cuando un restaurante marque un pedido como listo para entregar aparecerá aquí."));
 }
 
 async function vistaCalificacionesDomiciliario() {
@@ -1313,6 +1369,17 @@ const ACCIONES = {
   "avanzar-pedido": async (d) => {
     await api("PUT", `/orders/${enc(d.id)}/estado`, { estado: d.estado });
     toast(`Pedido ${d.id}: ${ESTADOS_PEDIDO[d.estado].texto}.`);
+    renderVista();
+  },
+  "tomar-pedido": async (d) => {
+    await api("PUT", `/orders/${enc(d.id)}/domiciliario`, { domiciliarioId: estado.perfil.identificacion });
+    toast(`Tomaste el pedido ${d.id}.`);
+    renderVista();
+  },
+  "guardar-guia": async (d) => {
+    const campo = $(`guia-${d.id}`);
+    await api("PUT", `/orders/${enc(d.id)}/guia`, { guia: campo ? campo.value.trim() : "" });
+    toast("Guía actualizada.");
     renderVista();
   },
   calificar: (d) => accionCalificar(d.id),

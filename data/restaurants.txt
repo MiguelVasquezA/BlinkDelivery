@@ -1,1 +1,5 @@
 111;koi sushi bar;comida asiatica;true
+112;pizzeria napoli;comida italiana;true
+113;la parrilla del llano;carnes y parrilla;true
+114;taqueria el mariachi;comida mexicana;true
+115;burger house;hamburguesas;true
