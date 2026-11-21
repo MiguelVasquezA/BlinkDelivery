@@ -9,7 +9,7 @@ const ESTADOS_PEDIDO = {
   RECIBIDO: { texto: "Recibido", tipo: "aviso" },
   ACEPTADO: { texto: "Aceptado", tipo: "acento" },
   EN_PREPARACION: { texto: "En preparación", tipo: "aviso" },
-  LISTO_PARA_RECOGER: { texto: "Listo para recoger", tipo: "acento" },
+  LISTO_PARA_ENTREGAR: { texto: "Listo para entregar", tipo: "acento" },
   EN_CAMINO: { texto: "En camino", tipo: "acento" },
   ENTREGADO: { texto: "Entregado", tipo: "ok" },
   CANCELADO: { texto: "Cancelado", tipo: "peligro" },
@@ -85,7 +85,7 @@ const PESTANAS = {
     { id: "datos", icono: "🏪", texto: "Datos del restaurante", vista: () => vistaDatosRestaurante() },
   ],
   domiciliario: [
-    { id: "entregas", icono: "🛵", texto: "Entregas disponibles", vista: () => vistaEntregas() },
+    { id: "entregas", icono: "🛵", texto: "Entregas", vista: () => vistaEntregas() },
     { id: "calificaciones", icono: "⭐", texto: "Mis calificaciones", vista: () => vistaCalificacionesDomiciliario() },
     { id: "perfil", icono: "👤", texto: "Mi perfil", vista: () => vistaPerfilDomiciliario() },
   ],
@@ -96,6 +96,11 @@ const cache = new Map();
 let nombresRestaurantes = new Map();
 let tokenRender = 0;
 let modalActual = null;
+
+/** Carrito del cliente. Un pedido es de un solo restaurante (RN09): el carrito guarda cuál es. */
+const CANTIDAD_MAXIMA = 99;
+const carrito = { restauranteId: null, cantidades: new Map() }; // productoId -> unidades
+const cantidadesMenu = new Map(); // productoId -> unidades elegidas en la tarjeta (por defecto 1)
 
 // ================================================================ utilidades
 
@@ -341,6 +346,7 @@ function entrar(rol, perfil) {
   estado.perfil = perfil;
   estado.pestana = PESTANAS[rol][0].id;
   estado.filtroRestaurante = "";
+  reiniciarCarrito();
   localStorage.setItem(CLAVE_SESION, JSON.stringify({ rol, clave: perfil[ROLES[rol].clave] }));
   mostrarAplicacion();
 }
@@ -355,6 +361,7 @@ function mostrarAplicacion() {
 function cambiarRol() {
   localStorage.removeItem(CLAVE_SESION);
   Object.assign(estado, { rol: null, perfil: null, pestana: null, filtroRestaurante: "" });
+  reiniciarCarrito();
   mostrarPantalla("inicio");
   comprobarConexion();
 }
@@ -490,7 +497,7 @@ function leerFormulario(form, campos) {
 // ---------------------------------------------------------------- buscador y filtros (cliente)
 
 let datosExplorar = { restaurantes: [] };
-let datosMenu = { productos: [] };
+let datosMenu = { productos: [], restaurantes: [] };
 
 /** Texto en minúsculas y sin tildes, para comparar búsquedas. */
 function normalizar(texto) {
@@ -565,13 +572,37 @@ function resultadosMenuHtml() {
     return sinResultados(datosMenu.productos.length > 0,
       vacio("🍽️", "No hay productos para mostrar", "Cuando los restaurantes publiquen su menú aparecerá aquí."));
   }
-  return rejilla(visibles.map((p) => `
+  return rejilla(visibles.map(tarjetaProductoHtml));
+}
+
+function restauranteAbierto(id) {
+  const r = datosMenu.restaurantes.find((x) => x.id === id);
+  return Boolean(r && r.abierto);
+}
+
+function tarjetaProductoHtml(p) {
+  const cantidad = cantidadesMenu.get(p.id) || 1;
+  const abierto = restauranteAbierto(p.restauranteId);
+  const puedePedir = p.disponible && abierto;
+  const motivo = !p.disponible ? "Este plato está agotado." : !abierto ? "El restaurante está cerrado." : "";
+  return `
     <article class="tarjeta">
       <div class="pie"><h3>${esc(p.nombre)}</h3>${p.disponible ? insignia("Disponible", "ok") : insignia("Agotado", "peligro")}</div>
       <p>${esc(p.descripcion)}</p>
       <p>${esc(nombreRestaurante(p.restauranteId))}</p>
       <div class="pie"><span class="precio">${moneda(p.precio)}</span></div>
-    </article>`));
+      <div class="pie">
+        <div class="selector-cantidad" role="group" aria-label="Cantidad de ${esc(p.nombre)}">
+          <button type="button" class="boton-secundario" data-accion="cantidad-tarjeta" data-id="${esc(p.id)}" data-delta="-1"
+            aria-label="Quitar una unidad" ${cantidad <= 1 ? "disabled" : ""}>−</button>
+          <span aria-live="polite">${cantidad}</span>
+          <button type="button" class="boton-secundario" data-accion="cantidad-tarjeta" data-id="${esc(p.id)}" data-delta="1"
+            aria-label="Agregar una unidad" ${cantidad >= CANTIDAD_MAXIMA ? "disabled" : ""}>+</button>
+        </div>
+        <button type="button" class="boton-primario" data-accion="agregar-carrito" data-id="${esc(p.id)}" ${puedePedir ? "" : "disabled"}>Agregar</button>
+      </div>
+      ${motivo ? `<p class="ayuda">${esc(motivo)}</p>` : ""}
+    </article>`;
 }
 
 /** Vuelve a pintar solo los resultados, sin recargar datos ni perder el foco del buscador. */
@@ -595,34 +626,184 @@ async function vistaExplorar() {
 
 async function vistaMenu() {
   const [productos, restaurantes] = await Promise.all([api("GET", "/products"), obtenerRestaurantes()]);
-  datosMenu = { productos };
-  return cabecera("Menú y productos", "Platos disponibles por restaurante.") +
+  datosMenu = { productos, restaurantes };
+  return cabecera("Menú y productos", "Elige platos de un restaurante y confirma tu pedido.") +
     barraFiltros({ vista: "menu", placeholder: "Buscar plato o descripción…", restaurantes }) +
-    `<div id="resultados-menu">${resultadosMenuHtml()}</div>`;
+    `<div class="menu-pedido">
+       <div id="resultados-menu">${resultadosMenuHtml()}</div>
+       <aside class="carrito" id="carrito" aria-label="Carrito de compras">${carritoHtml()}</aside>
+     </div>`;
+}
+
+// ---------------------------------------------------------------- carrito (cliente)
+
+function vaciarCarrito() {
+  carrito.restauranteId = null;
+  carrito.cantidades.clear();
+}
+
+/** Vacía el carrito y olvida las cantidades elegidas en las tarjetas (al salir de la sesión). */
+function reiniciarCarrito() {
+  vaciarCarrito();
+  cantidadesMenu.clear();
+}
+
+function unidadesTotales() {
+  return [...carrito.cantidades.values()].reduce((suma, n) => suma + n, 0);
+}
+
+/** Líneas del carrito con los datos del producto. Descarta los que ya no existen en el menú. */
+function lineasCarrito() {
+  return [...carrito.cantidades.entries()]
+    .map(([id, cantidad]) => {
+      const producto = datosMenu.productos.find((p) => p.id === id);
+      return producto ? { producto, cantidad, subtotal: Number(producto.precio) * cantidad } : null;
+    })
+    .filter(Boolean);
+}
+
+function agregarAlCarrito(id, cantidad) {
+  const producto = datosMenu.productos.find((p) => p.id === id);
+  if (!producto) throw new Error("Ese plato ya no está disponible en el menú.");
+  if (!producto.disponible) throw new Error(`«${producto.nombre}» está agotado.`);
+  if (!restauranteAbierto(producto.restauranteId)) {
+    throw new Error(`${nombreRestaurante(producto.restauranteId)} está cerrado en este momento.`);
+  }
+  if (carrito.cantidades.size && carrito.restauranteId !== producto.restauranteId) {
+    throw new Error(`Tu pedido es de ${nombreRestaurante(carrito.restauranteId)}. Confírmalo o vacía el carrito para pedir de otro restaurante.`);
+  }
+  carrito.restauranteId = producto.restauranteId;
+  const nueva = Math.min(CANTIDAD_MAXIMA, (carrito.cantidades.get(id) || 0) + cantidad);
+  carrito.cantidades.set(id, nueva);
+}
+
+function cambiarCantidadCarrito(id, delta) {
+  const nueva = (carrito.cantidades.get(id) || 0) + delta;
+  if (nueva <= 0) {
+    quitarDelCarrito(id);
+    return;
+  }
+  carrito.cantidades.set(id, Math.min(CANTIDAD_MAXIMA, nueva));
+}
+
+function quitarDelCarrito(id) {
+  carrito.cantidades.delete(id);
+  if (!carrito.cantidades.size) carrito.restauranteId = null;
+}
+
+function carritoHtml() {
+  const lineas = lineasCarrito();
+  if (!lineas.length) {
+    return `<h3>Tu pedido</h3>
+      ${vacio("🛒", "Tu carrito está vacío", "Elige la cantidad de un plato y pulsa «Agregar».")}`;
+  }
+  const total = lineas.reduce((suma, l) => suma + l.subtotal, 0);
+  const abierto = restauranteAbierto(carrito.restauranteId);
+  return `
+    <div class="carrito-cabecera">
+      <h3>Tu pedido</h3>
+      <span>${esc(nombreRestaurante(carrito.restauranteId))} · ${unidadesTotales()} ${unidadesTotales() === 1 ? "unidad" : "unidades"}</span>
+    </div>
+    <ul class="carrito-lineas">
+      ${lineas.map((l) => `
+        <li>
+          <div class="carrito-linea-texto">
+            <strong>${esc(l.producto.nombre)}</strong>
+            <span>${moneda(l.producto.precio)} c/u</span>
+          </div>
+          <div class="selector-cantidad" role="group" aria-label="Cantidad de ${esc(l.producto.nombre)}">
+            <button type="button" class="boton-secundario" data-accion="cantidad-carrito" data-id="${esc(l.producto.id)}" data-delta="-1" aria-label="Quitar una unidad">−</button>
+            <span>${l.cantidad}</span>
+            <button type="button" class="boton-secundario" data-accion="cantidad-carrito" data-id="${esc(l.producto.id)}" data-delta="1"
+              aria-label="Agregar una unidad" ${l.cantidad >= CANTIDAD_MAXIMA ? "disabled" : ""}>+</button>
+          </div>
+          <strong class="precio">${moneda(l.subtotal)}</strong>
+          <button type="button" class="enlace" data-accion="quitar-carrito" data-id="${esc(l.producto.id)}">Quitar</button>
+        </li>`).join("")}
+    </ul>
+    <div class="carrito-total"><span>Total</span><strong class="precio">${moneda(total)}</strong></div>
+    <p class="ayuda">Entrega en: ${esc(estado.perfil.direccion || "—")}</p>
+    ${abierto ? "" : `<p class="ayuda error">Este restaurante está cerrado; no se puede confirmar el pedido.</p>`}
+    <div class="acciones-carrito">
+      <button type="button" class="boton-secundario" data-accion="vaciar-carrito">Vaciar</button>
+      <button type="button" class="boton-primario" data-accion="confirmar-pedido" id="btn-confirmar" ${abierto ? "" : "disabled"}>Confirmar pedido</button>
+    </div>`;
+}
+
+/** Vuelve a pintar el carrito sin recargar el catálogo. */
+function pintarCarrito() {
+  const el = $("carrito");
+  if (el) el.innerHTML = carritoHtml();
+}
+
+let confirmandoPedido = false;
+
+async function confirmarPedido() {
+  if (confirmandoPedido) return;
+  const lineas = lineasCarrito();
+  if (!lineas.length) throw new Error("Tu carrito está vacío.");
+  confirmandoPedido = true;
+  try {
+    const pedido = await api("POST", "/orders", {
+      clienteId: estado.perfil.identificacion,
+      restauranteId: carrito.restauranteId,
+      items: lineas.map((l) => ({ productoId: l.producto.id, cantidad: l.cantidad })),
+    });
+    reiniciarCarrito();
+    toast(`Pedido ${pedido.id} creado por ${moneda(pedido.total)}.`);
+    estado.pestana = "pedidos";
+    estado.busqueda = "";
+    renderNav();
+    renderVista();
+  } finally {
+    confirmandoPedido = false;
+    pintarCarrito();
+  }
+}
+
+/** Pedidos entregados del cliente que todavía no tienen calificación (RN12). */
+function pedidosCalificables(pedidos, calificaciones) {
+  const yo = estado.perfil.identificacion;
+  const calificados = new Set(calificaciones.filter((r) => r.clienteId === yo).map((r) => r.pedidoId));
+  return pedidos.filter((o) => o.clienteId === yo && o.estado === "ENTREGADO" && !calificados.has(o.id));
 }
 
 async function vistaPedidosCliente() {
-  const [pedidos] = await Promise.all([api("GET", "/orders"), obtenerRestaurantes()]);
-  const mios = pedidos.filter((o) => o.clienteId === estado.perfil.identificacion).sort(porFechaDesc);
+  const [pedidos, calificaciones] = await Promise.all([api("GET", "/orders"), api("GET", "/ratings"), obtenerRestaurantes()]);
+  const yo = estado.perfil.identificacion;
+  const mios = pedidos.filter((o) => o.clienteId === yo).sort(porFechaDesc);
+  const calificacionPorPedido = new Map(calificaciones.filter((r) => r.clienteId === yo).map((r) => [r.pedidoId, r]));
+  cache.set("elegibles", pedidosCalificables(pedidos, calificaciones));
+
   return cabecera("Mis pedidos", "Seguimiento de tus pedidos.") +
     (mios.length
-      ? rejilla(mios.map((o) => `
+      ? rejilla(mios.map((o) => {
+          const calificacion = calificacionPorPedido.get(o.id);
+          const pie = calificacion
+            ? `<span>Tu calificación: ${estrellas(calificacion.estrellas)}</span>`
+            : o.estado === "ENTREGADO"
+              ? `<button type="button" class="boton-secundario" data-accion="calificar" data-id="${esc(o.id)}">Calificar</button>`
+              : "";
+          return `
           <article class="tarjeta">
             <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
             <p>${esc(nombreRestaurante(o.restauranteId))}</p>
-            <p>${o.items.map((i) => `${i.cantidad} × ${esc(i.nombre)}`).join("<br>")}</p>
+            <p>${productosHtml(o)}</p>
             <p>Entrega: ${esc(o.direccionEntrega || "—")}</p>
+            ${o.domiciliarioNombre ? `<p>Domiciliario: ${esc(o.domiciliarioNombre)}</p>` : ""}
+            ${o.guia ? `<p>Guía de seguimiento: ${esc(o.guia)}</p>` : ""}
             <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
-          </article>`))
-      : vacio("📦", "Aún no tienes pedidos", "Cuando hagas un pedido aparecerá aquí con su estado."));
+            ${pie ? `<div class="pie">${pie}</div>` : ""}
+          </article>`;
+        }))
+      : vacio("📦", "Aún no tienes pedidos", "Elige platos en «Menú y productos» y confirma tu pedido."));
 }
 
 async function vistaCalificacionesCliente() {
   const [pedidos, calificaciones] = await Promise.all([api("GET", "/orders"), api("GET", "/ratings"), obtenerRestaurantes()]);
   const yo = estado.perfil.identificacion;
   const mias = calificaciones.filter((r) => r.clienteId === yo).sort(porFechaDesc);
-  const calificados = new Set(mias.map((r) => r.pedidoId));
-  const elegibles = pedidos.filter((o) => o.clienteId === yo && o.estado === "ENTREGADO" && !calificados.has(o.id));
+  const elegibles = pedidosCalificables(pedidos, calificaciones);
   cache.set("elegibles", elegibles);
 
   return cabecera("Calificaciones", "Califica tus pedidos entregados.",
@@ -638,30 +819,35 @@ async function vistaCalificacionesCliente() {
       : vacio("⭐", "Aún no has calificado pedidos", "Cuando un pedido sea entregado podrás calificarlo aquí."));
 }
 
-function accionCalificar() {
+function accionCalificar(pedidoPreseleccionado) {
   const elegibles = cache.get("elegibles") || [];
+  if (!elegibles.length) throw new Error("No tienes pedidos entregados por calificar.");
   abrirModal({
     titulo: "Calificar pedido",
     textoEnviar: "Enviar calificación",
+    mensajeOk: "Calificación enviada. ¡Gracias!",
+    valores: { pedidoId: pedidoPreseleccionado },
     campos: [
       {
         nombre: "pedidoId", etiqueta: "Pedido", tipo: "select", obligatorio: true, completa: true,
         opciones: elegibles.map((o) => ({ valor: o.id, etiqueta: `${o.id} · ${nombreRestaurante(o.restauranteId)}` })),
       },
-      { nombre: "estrellas", etiqueta: "Estrellas (1 a 5)", tipo: "number", min: 1, max: 5, obligatorio: true },
-      { nombre: "comentario", etiqueta: "Comentario (opcional)", tipo: "textarea", completa: true },
+      {
+        nombre: "estrellas", etiqueta: "Puntuación", tipo: "select", obligatorio: true,
+        opciones: [5, 4, 3, 2, 1].map((n) => ({ valor: String(n), etiqueta: `${"★".repeat(n)}${"☆".repeat(5 - n)} (${n})` })),
+      },
+      { nombre: "comentario", etiqueta: "Comentario (opcional, máximo 200 caracteres)", tipo: "textarea", completa: true },
     ],
     enviar: async (d) => {
       const pedido = elegibles.find((o) => o.id === d.pedidoId);
       if (!pedido) throw new Error("Ese pedido ya no está disponible para calificar.");
       await api("POST", "/ratings", {
-        id: `CAL-${Date.now()}`,
         pedidoId: pedido.id,
         clienteId: estado.perfil.identificacion,
-        restauranteId: pedido.restauranteId,
-        estrellas: d.estrellas,
+        estrellas: Number(d.estrellas),
         comentario: d.comentario,
       });
+      cache.delete("elegibles");
     },
   });
 }
@@ -847,15 +1033,32 @@ async function accionQuitarCategoria(d) {
   renderVista();
 }
 
+/**
+ * Lo que el restaurante puede hacer con un pedido: solo avanza hasta LISTO_PARA_ENTREGAR.
+ * Después de eso el envío es responsabilidad del domiciliario.
+ */
+const ACCION_RESTAURANTE = {
+  RECIBIDO: { destino: "ACEPTADO", texto: "Aceptar pedido" },
+  ACEPTADO: { destino: "EN_PREPARACION", texto: "Empezar preparación" },
+  EN_PREPARACION: { destino: "LISTO_PARA_ENTREGAR", texto: "Marcar listo para entregar" },
+};
+
 async function vistaPedidosRestaurante() {
   const [pedidos] = await Promise.all([api("GET", "/orders"), obtenerRestaurantes()]);
   const mios = pedidos.filter((o) => o.restauranteId === estado.perfil.id).sort(porFechaDesc);
-  return cabecera("Pedidos recibidos", "Pedidos de tu restaurante.") +
-    `<p class="ayuda">Vista de consulta: cambiar el estado de un pedido todavía no está disponible en la API.</p>` +
+  return cabecera("Pedidos recibidos", "Pedidos de tu restaurante y su avance.") +
     (mios.length
-      ? tablaHtml(["Pedido", "Cliente", "Estado", "Fecha", "Total"], mios.map((o) => [
-          esc(o.id), esc(o.clienteId), insigniaEstado(o.estado), fecha(o.fechaHora), moneda(o.total),
-        ]))
+      ? tablaHtml(["Pedido", "Cliente", "Estado", "Fecha", "Total", "Avanzar"], mios.map((o) => {
+          const accion = ACCION_RESTAURANTE[o.estado];
+          let celda = "—";
+          if (accion) {
+            celda = `<button type="button" class="boton-secundario" data-accion="avanzar-pedido" data-id="${esc(o.id)}"
+                 data-estado="${accion.destino}">${esc(accion.texto)}</button>`;
+          } else if (o.estado === "LISTO_PARA_ENTREGAR") {
+            celda = `<span class="ayuda">Esperando domiciliario</span>`;
+          }
+          return [esc(o.id), esc(o.clienteId), insigniaEstado(o.estado), fecha(o.fechaHora), moneda(o.total), celda];
+        }))
       : vacio("📦", "Aún no hay pedidos", "Cuando lleguen pedidos a tu restaurante aparecerán aquí."));
 }
 
@@ -896,22 +1099,72 @@ function accionEditarRestaurante() {
 
 // ================================================================ vistas: domiciliario
 
+/** Productos de un pedido en una lista corta para las tarjetas del domiciliario. */
+function productosHtml(o) {
+  return o.items.map((i) => `${i.cantidad} × ${esc(i.nombre)}`).join("<br>");
+}
+
+/** Pedido listo para entregar que aún no tiene domiciliario: el domiciliario puede tomarlo. */
+function tarjetaDisponibleHtml(o, puedeTomar) {
+  return `
+    <article class="tarjeta">
+      <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
+      <p>Recoger en: ${esc(nombreRestaurante(o.restauranteId))}</p>
+      <p>Entregar en: ${esc(o.direccionEntrega || "—")}</p>
+      <p>${productosHtml(o)}</p>
+      <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
+      <div class="pie">
+        <button type="button" class="boton-primario" data-accion="tomar-pedido" data-id="${esc(o.id)}"
+          ${puedeTomar ? "" : "disabled"}>Tomar pedido</button>
+      </div>
+    </article>`;
+}
+
+/** Pedido asignado a este domiciliario: guía de seguimiento y avance hasta ENTREGADO. */
+function tarjetaEntregaHtml(o) {
+  const siguiente = o.estado === "EN_CAMINO"
+    ? { destino: "ENTREGADO", texto: "Marcar como entregado" }
+    : { destino: "EN_CAMINO", texto: "Salir a entrega" };
+  return `
+    <article class="tarjeta">
+      <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
+      <p>Recoger en: ${esc(nombreRestaurante(o.restauranteId))}</p>
+      <p>Entregar en: ${esc(o.direccionEntrega || "—")}</p>
+      <p>${productosHtml(o)}</p>
+      <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
+      <label class="ayuda" for="guia-${esc(o.id)}">Guía de seguimiento</label>
+      <div class="pie">
+        <input type="text" id="guia-${esc(o.id)}" value="${esc(o.guia || "")}" maxlength="120"
+          placeholder="Número de guía o nota de ubicación">
+        <button type="button" class="boton-secundario" data-accion="guardar-guia" data-id="${esc(o.id)}">Actualizar guía</button>
+      </div>
+      <div class="pie">
+        <button type="button" class="boton-primario" data-accion="avanzar-pedido" data-id="${esc(o.id)}"
+          data-estado="${siguiente.destino}">${esc(siguiente.texto)}</button>
+      </div>
+    </article>`;
+}
+
 async function vistaEntregas() {
-  const [pedidos] = await Promise.all([api("GET", "/orders"), obtenerRestaurantes()]);
-  const disponibles = pedidos
-    .filter((o) => o.estado === "LISTO_PARA_RECOGER" || o.estado === "EN_CAMINO")
+  const yo = estado.perfil.identificacion;
+  const [pedidos, driver] = await Promise.all([api("GET", "/orders"), api("GET", `/drivers/${enc(yo)}`), obtenerRestaurantes()]);
+  estado.perfil = driver;
+  const libres = pedidos.filter((o) => o.estado === "LISTO_PARA_ENTREGAR" && !o.domiciliarioId).sort(porFechaDesc);
+  const mias = pedidos
+    .filter((o) => o.domiciliarioId === yo && (o.estado === "LISTO_PARA_ENTREGAR" || o.estado === "EN_CAMINO"))
     .sort(porFechaDesc);
-  return cabecera("Entregas disponibles", "Pedidos listos para recoger o en camino.") +
-    `<p class="ayuda">La asignación de pedidos a domiciliarios todavía no está disponible en la API; aquí solo se consultan.</p>` +
-    (disponibles.length
-      ? rejilla(disponibles.map((o) => `
-          <article class="tarjeta">
-            <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
-            <p>Recoger en: ${esc(nombreRestaurante(o.restauranteId))}</p>
-            <p>Entregar en: ${esc(o.direccionEntrega || "—")}</p>
-            <div class="pie"><span>${fecha(o.fechaHora)}</span><strong class="precio">${moneda(o.total)}</strong></div>
-          </article>`))
-      : vacio("🛵", "No hay entregas disponibles", "Cuando un pedido esté listo para recoger aparecerá aquí."));
+  const puedeTomar = driver.estado === "DISPONIBLE" && mias.length === 0;
+
+  return cabecera("Entregas", "Toma pedidos listos para entregar y actualiza su avance.") +
+    `<h3>Mi entrega actual</h3>` +
+    (mias.length
+      ? rejilla(mias.map(tarjetaEntregaHtml))
+      : vacio("🛵", "No tienes entregas en curso", "Cuando tomes un pedido aparecerá aquí.")) +
+    `<h3>Pedidos disponibles</h3>` +
+    (puedeTomar ? "" : `<p class="ayuda">Solo puedes tomar un pedido a la vez y cuando tu estado sea «Disponible» (ahora: ${esc(driver.estado)}).</p>`) +
+    (libres.length
+      ? rejilla(libres.map((o) => tarjetaDisponibleHtml(o, puedeTomar)))
+      : vacio("🛵", "No hay pedidos para entregar", "Cuando un restaurante marque un pedido como listo para entregar aparecerá aquí."));
 }
 
 async function vistaCalificacionesDomiciliario() {
@@ -1088,7 +1341,48 @@ const ACCIONES = {
     renderVista();
   },
   reintentar: () => renderVista(),
-  calificar: () => accionCalificar(),
+  "cantidad-tarjeta": (d) => {
+    const id = d.id;
+    const nueva = Math.min(CANTIDAD_MAXIMA, Math.max(1, (cantidadesMenu.get(id) || 1) + Number(d.delta)));
+    cantidadesMenu.set(id, nueva);
+    pintarResultados("menu");
+  },
+  "agregar-carrito": (d) => {
+    const cantidad = cantidadesMenu.get(d.id) || 1;
+    agregarAlCarrito(d.id, cantidad);
+    pintarCarrito();
+    toast(`Agregado al pedido: ${cantidad} × ${datosMenu.productos.find((p) => p.id === d.id)?.nombre ?? "plato"}.`);
+  },
+  "cantidad-carrito": (d) => {
+    cambiarCantidadCarrito(d.id, Number(d.delta));
+    pintarCarrito();
+  },
+  "quitar-carrito": (d) => {
+    quitarDelCarrito(d.id);
+    pintarCarrito();
+  },
+  "vaciar-carrito": () => {
+    vaciarCarrito();
+    pintarCarrito();
+  },
+  "confirmar-pedido": () => confirmarPedido(),
+  "avanzar-pedido": async (d) => {
+    await api("PUT", `/orders/${enc(d.id)}/estado`, { estado: d.estado });
+    toast(`Pedido ${d.id}: ${ESTADOS_PEDIDO[d.estado].texto}.`);
+    renderVista();
+  },
+  "tomar-pedido": async (d) => {
+    await api("PUT", `/orders/${enc(d.id)}/domiciliario`, { domiciliarioId: estado.perfil.identificacion });
+    toast(`Tomaste el pedido ${d.id}.`);
+    renderVista();
+  },
+  "guardar-guia": async (d) => {
+    const campo = $(`guia-${d.id}`);
+    await api("PUT", `/orders/${enc(d.id)}/guia`, { guia: campo ? campo.value.trim() : "" });
+    toast("Guía actualizada.");
+    renderVista();
+  },
+  calificar: (d) => accionCalificar(d.id),
   "editar-cliente": () => accionEditarCliente(),
   "nueva-direccion": () => accionNuevaDireccion(),
   "nuevo-producto": () => accionNuevoProducto(),

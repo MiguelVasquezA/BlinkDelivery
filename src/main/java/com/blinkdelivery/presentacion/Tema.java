@@ -236,7 +236,7 @@ public final class Tema {
             return switch (estado) {
                 case RECIBIDO, ACEPTADO -> NEON;
                 case EN_PREPARACION -> ADVERTENCIA;
-                case LISTO_PARA_RECOGER, ENTREGADO -> OK;
+                case LISTO_PARA_ENTREGAR, ENTREGADO -> OK;
                 case EN_CAMINO -> FUCSIA;
                 case CANCELADO -> ERROR;
             };

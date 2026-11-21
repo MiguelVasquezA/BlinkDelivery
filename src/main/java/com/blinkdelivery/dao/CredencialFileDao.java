@@ -1,6 +1,7 @@
 package com.blinkdelivery.dao;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,6 +27,21 @@ public class CredencialFileDao {
 
     public void guardar(String rol, String usuario, String sal, String hash) throws IOException {
         List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
+        lineas.add(rol + ";" + usuario + ";" + sal + ";" + hash);
+        ArchivoUtil.guardarArchivo(RUTA, lineas);
+    }
+
+    /**
+     * Establece la credencial de un perfil, reemplazando la que tuviera antes (si la había).
+     * A diferencia de {@link #guardar}, no duplica la línea: sirve para sembrar cuentas repetibles.
+     */
+    public void sustituir(String rol, String usuario, String sal, String hash) throws IOException {
+        List<String> lineas = new ArrayList<>();
+        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
+            String[] p = linea.split(";", -1);
+            boolean mismoPerfil = p.length == 4 && p[0].equals(rol) && p[1].equalsIgnoreCase(usuario);
+            if (!mismoPerfil) lineas.add(linea);
+        }
         lineas.add(rol + ";" + usuario + ";" + sal + ";" + hash);
         ArchivoUtil.guardarArchivo(RUTA, lineas);
     }

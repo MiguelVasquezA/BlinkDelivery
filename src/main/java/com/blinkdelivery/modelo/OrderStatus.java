@@ -7,7 +7,7 @@ package com.blinkdelivery.modelo;
  * la regla del flujo de pedidos vive en un único lugar:
  * </p>
  * <pre>
- * RECIBIDO → ACEPTADO → EN_PREPARACION → LISTO_PARA_RECOGER → EN_CAMINO → ENTREGADO
+ * RECIBIDO → ACEPTADO → EN_PREPARACION → LISTO_PARA_ENTREGAR → EN_CAMINO → ENTREGADO
  * (cualquier estado anterior a EN_CAMINO) → CANCELADO
  * </pre>
  *
@@ -21,8 +21,8 @@ public enum OrderStatus {
     ACEPTADO("Aceptado"),
     /** El restaurante está preparando el pedido. */
     EN_PREPARACION("En preparación"),
-    /** El pedido está listo para que el domiciliario lo recoja. */
-    LISTO_PARA_RECOGER("Listo para recoger"),
+    /** El restaurante terminó el pedido; ya puede tomarlo un domiciliario. */
+    LISTO_PARA_ENTREGAR("Listo para entregar"),
     /** El domiciliario lleva el pedido al cliente. */
     EN_CAMINO("En camino"),
     /** Estado final: el pedido fue entregado al cliente. */
@@ -62,8 +62,8 @@ public enum OrderStatus {
             case ACEPTADO:
                 return destino == EN_PREPARACION || destino == CANCELADO;
             case EN_PREPARACION:
-                return destino == LISTO_PARA_RECOGER || destino == CANCELADO;
-            case LISTO_PARA_RECOGER:
+                return destino == LISTO_PARA_ENTREGAR || destino == CANCELADO;
+            case LISTO_PARA_ENTREGAR:
                 return destino == EN_CAMINO || destino == CANCELADO;
             case EN_CAMINO:
                 return destino == ENTREGADO;
@@ -76,7 +76,7 @@ public enum OrderStatus {
      * Convierte un texto en un estado. Acepta el nombre de la constante
      * ({@code EN_CAMINO}) o la descripción ({@code "En camino"}), sin distinguir
      * mayúsculas ni tildes, y también los nombres de la versión anterior
-     * ({@code "Creado"}, {@code "Confirmado"}, {@code "Listo"}).
+     * ({@code "Creado"}, {@code "Confirmado"}, {@code "Listo"}, {@code "LISTO_PARA_RECOGER"}).
      *
      * @param texto Texto a convertir.
      * @return El estado correspondiente.
@@ -90,7 +90,8 @@ public enum OrderStatus {
             case "CONFIRMADO":
                 return ACEPTADO;
             case "LISTO":
-                return LISTO_PARA_RECOGER;
+            case "LISTO_PARA_RECOGER": // nombre anterior del estado LISTO_PARA_ENTREGAR
+                return LISTO_PARA_ENTREGAR;
             default:
                 break;
         }
