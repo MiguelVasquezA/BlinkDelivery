@@ -211,7 +211,7 @@ public class DriverFrame extends JFrame {
             modeloDisponibles.setRowCount(0);
             int disponibles = 0;
             for (Order p : orderService.listarPedidos()) {
-                if (p.getEstado() == OrderStatus.LISTO_PARA_RECOGER && !p.tieneDomiciliario()) {
+                if (p.getEstado() == OrderStatus.LISTO_PARA_ENTREGAR && !p.tieneDomiciliario()) {
                     disponibles++;
                     modeloDisponibles.addRow(new Object[] {p.getId(), p.getRestaurante().getNombre(),
                             p.getDireccionEntrega().getDireccionExacta(), Tema.cop(p.getTotal())});

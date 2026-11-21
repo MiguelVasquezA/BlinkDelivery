@@ -1,1 +1,5 @@
 1111;miguel vasquez;302222323;manzana 94 cs 3
+1112;laura gomez;311555018;calle 72 #45-10 apto 301
+1113;andres pineda;3104467720;carrera 15 #98-20 torre B 502
+1114;camila rojas;3016632894;avenida 6 #12-30 barrio centro
+1115;sebastian ruiz;3207781945;calle 10 #22-45 conjunto los olivos casa 7

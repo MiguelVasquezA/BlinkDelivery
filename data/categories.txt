@@ -1,1 +1,5 @@
 CAT-001;comida asiatica;
+CAT-002;comida italiana;
+CAT-003;carnes y parrilla;
+CAT-004;comida mexicana;
+CAT-005;hamburguesas;

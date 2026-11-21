@@ -1,6 +1,7 @@
 package com.blinkdelivery.service;
 
 import com.blinkdelivery.dao.DriverFileDao;
+import com.blinkdelivery.dao.GuiaPedidoFileDao;
 import com.blinkdelivery.dao.OrderFileDao;
 import com.blinkdelivery.dao.OrderStatusHistoryFileDao;
 import com.blinkdelivery.modelo.Address;
@@ -50,6 +51,9 @@ public class OrderService {
 
     /** DAO usado para actualizar el estado de los domiciliarios. */
     private final DriverFileDao driverDao = new DriverFileDao();
+
+    /** DAO de la guía de seguimiento que el domiciliario actualiza durante la entrega. */
+    private final GuiaPedidoFileDao guiaDao = new GuiaPedidoFileDao();
 
     private final CustomerService customerService = new CustomerService();
     private final RestaurantService restaurantService = new RestaurantService();
@@ -231,7 +235,7 @@ public class OrderService {
     }
 
     /**
-     * Asigna un domiciliario a un pedido que está listo para recoger (RN10).
+     * Asigna un domiciliario a un pedido que está listo para entregar (RN10).
      * El domiciliario queda {@link DriverStatus#EN_ENTREGA} mientras atiende el pedido.
      *
      * @param idPedido       identificador del pedido
@@ -239,15 +243,15 @@ public class OrderService {
      * @return el pedido con el domiciliario asignado
      * @throws IOException              si ocurre un error al leer o escribir el archivo
      * @throws IllegalArgumentException si no existe el pedido o el domiciliario
-     * @throws IllegalStateException    si el pedido no está listo para recoger, ya tiene
+     * @throws IllegalStateException    si el pedido no está listo para entregar, ya tiene
      *                                  domiciliario o el domiciliario no está disponible
      */
     public Order asignarDomiciliario(String idPedido, String idDomiciliario) throws IOException {
         Order pedido = obtenerPorId(idPedido);
 
-        if (pedido.getEstado() != OrderStatus.LISTO_PARA_RECOGER) {
+        if (pedido.getEstado() != OrderStatus.LISTO_PARA_ENTREGAR) {
             throw new IllegalStateException("Solo se puede asignar domiciliario a un pedido '"
-                    + OrderStatus.LISTO_PARA_RECOGER + "'. Estado actual: '" + pedido.getEstado() + "'.");
+                    + OrderStatus.LISTO_PARA_ENTREGAR + "'. Estado actual: '" + pedido.getEstado() + "'.");
         }
         if (pedido.tieneDomiciliario()) {
             throw new IllegalStateException("El pedido ya tiene un domiciliario asignado (RN10).");
@@ -282,6 +286,37 @@ public class OrderService {
             throw new IllegalStateException("No hay domiciliarios disponibles en este momento.");
         }
         return asignarDomiciliario(idPedido, disponible.getId());
+    }
+
+    /**
+     * Actualiza la guía de seguimiento de un pedido (texto libre, por ejemplo el número de guía
+     * o una nota de ubicación). Solo es posible cuando el pedido ya tiene domiciliario asignado
+     * y todavía no está finalizado.
+     *
+     * @param idPedido identificador del pedido
+     * @param texto    nuevo texto de la guía (vacío para borrarla)
+     * @throws IOException              si ocurre un error al leer o escribir el archivo
+     * @throws IllegalArgumentException si no existe el pedido
+     * @throws IllegalStateException    si el pedido no tiene domiciliario o ya está finalizado
+     */
+    public void actualizarGuia(String idPedido, String texto) throws IOException {
+        Order pedido = obtenerPorId(idPedido);
+        if (!pedido.tieneDomiciliario() || pedido.getEstado().esFinal()) {
+            throw new IllegalStateException("Solo se puede actualizar la guía de un pedido con domiciliario "
+                    + "asignado y que no esté finalizado. Estado actual: '" + pedido.getEstado() + "'.");
+        }
+        guiaDao.guardar(pedido.getId(), texto);
+    }
+
+    /**
+     * Guía de seguimiento de un pedido.
+     *
+     * @param idPedido identificador del pedido
+     * @return el texto de la guía, o {@code null} si aún no tiene
+     * @throws IOException si ocurre un error al leer el archivo
+     */
+    public String obtenerGuia(String idPedido) throws IOException {
+        return guiaDao.listar().get(idPedido);
     }
 
     /**

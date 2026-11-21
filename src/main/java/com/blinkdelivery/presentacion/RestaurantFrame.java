@@ -157,8 +157,8 @@ public class RestaurantFrame extends JFrame {
         aceptar.addActionListener(e -> cambiarEstadoPedido(OrderStatus.ACEPTADO));
         JButton preparar = Tema.boton("En preparación", false);
         preparar.addActionListener(e -> cambiarEstadoPedido(OrderStatus.EN_PREPARACION));
-        JButton listo = Tema.boton("Listo para recoger", true);
-        listo.addActionListener(e -> cambiarEstadoPedido(OrderStatus.LISTO_PARA_RECOGER));
+        JButton listo = Tema.boton("Listo para entregar", true);
+        listo.addActionListener(e -> cambiarEstadoPedido(OrderStatus.LISTO_PARA_ENTREGAR));
         acciones.add(cancelar);
         acciones.add(aceptar);
         acciones.add(preparar);
@@ -230,7 +230,7 @@ public class RestaurantFrame extends JFrame {
                 switch (estado) {
                     case RECIBIDO -> nuevos++;
                     case ACEPTADO, EN_PREPARACION -> preparando++;
-                    case LISTO_PARA_RECOGER -> listos++;
+                    case LISTO_PARA_ENTREGAR -> listos++;
                     default -> { }
                 }
                 modeloPedidos.addRow(new Object[] {p.getId(), p.getCliente().getNombre(), resumen(p),

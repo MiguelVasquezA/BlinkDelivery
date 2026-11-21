@@ -1,1 +1,5 @@
-222;adriana Dangond;323245534;moto;true
+222;adriana dangond;323245534;moto;DISPONIBLE
+223;julian mora;3157700412;moto;DISPONIBLE
+224;yeison castillo;3186602157;bicicleta;DISPONIBLE
+225;daniela vargas;3122209981;moto;DISPONIBLE
+226;felipe ortiz;3014498836;moto;DISPONIBLE
