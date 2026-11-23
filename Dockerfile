@@ -27,4 +27,6 @@ USER appuser
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["java", "-cp", "/app/classes", "com.blinkdelivery.api.ApiServer"]
+# Al arrancar, copia el Secret File de Render a data/ (la app lee data/credenciales.txt).
+# Se hace en tiempo de ejecución porque los Secret Files no existen durante el build.
+CMD ["sh", "-c", "mkdir -p /app/data && cp -f /etc/secrets/credenciales.txt /app/data/credenciales.txt && exec java -cp /app/classes com.blinkdelivery.api.ApiServer"]
