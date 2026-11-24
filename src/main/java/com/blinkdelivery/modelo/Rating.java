@@ -48,7 +48,7 @@ public class Rating implements Serializable {
      */
     public Rating(String id, String orderId, String customerId, String restaurantId,
                   int estrellas, String comentario) {
-        this(id, orderId, customerId, restaurantId, estrellas, comentario, LocalDateTime.now());
+        this(id, orderId, customerId, restaurantId, estrellas, comentario, ZonaHoraria.ahora());
     }
 
     /**

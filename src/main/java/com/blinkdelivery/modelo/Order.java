@@ -71,7 +71,7 @@ public class Order implements Serializable {
     public Order(String id, Customer cliente, Restaurant restaurante, Address direccionEntrega,
                  List<OrderItem> items, CommissionPolicy politicaComision) {
         this(id, cliente, restaurante, direccionEntrega, items, OrderStatus.RECIBIDO,
-                LocalDateTime.now(), null, politicaComision);
+                ZonaHoraria.ahora(), null, politicaComision);
     }
 
     /**

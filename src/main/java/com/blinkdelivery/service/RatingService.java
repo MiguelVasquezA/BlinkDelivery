@@ -5,10 +5,10 @@ import com.blinkdelivery.modelo.Order;
 import com.blinkdelivery.modelo.OrderStatus;
 import com.blinkdelivery.modelo.Rating;
 import com.blinkdelivery.modelo.Restaurant;
+import com.blinkdelivery.modelo.ZonaHoraria;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -108,7 +108,7 @@ public class RatingService {
         }
 
         Rating calificacion = new Rating(siguienteId(), pedido.getId(), clienteId, pedido.getRestaurantId(),
-                puntuacion, comentarioLimpio, LocalDateTime.now(), domiciliarioId);
+                puntuacion, comentarioLimpio, ZonaHoraria.ahora(), domiciliarioId);
         ratingDao.guardar(calificacion);
         return calificacion;
     }
