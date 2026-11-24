@@ -26,6 +26,9 @@ import java.util.List;
 public class CustomerService {
 
     /** DAO que guarda y lee los clientes (con su dirección principal). */
+    /** Id provisional de una dirección nueva; la base de datos le asigna el definitivo. */
+    private static final String ID_PENDIENTE_DIRECCION = "pendiente";
+
     private final CustomerFileDao customerDao = new CustomerFileDao();
 
     /** DAO de las direcciones adicionales de los clientes. */
@@ -225,10 +228,10 @@ public class CustomerService {
             }
         }
 
-        String idDireccion = siguienteIdDireccion(cliente);
-        Address direccion = new Address(idDireccion, eti, exacta, bar, ref);
+        // El id lo asigna la base de datos (columna de identidad) y vuelve en la dirección guardada.
+        Address direccion = addressDao.guardar(cliente.getId(),
+                new Address(ID_PENDIENTE_DIRECCION, eti, exacta, bar, ref));
         cliente.agregarDireccion(direccion);
-        addressDao.guardar(cliente.getId(), direccion);
         return direccion;
     }
 
@@ -306,22 +309,4 @@ public class CustomerService {
         }
     }
 
-    /** Genera un id de dirección que no exista para ningún cliente (RN02, SP08). */
-    private String siguienteIdDireccion(Customer cliente) throws IOException {
-        int n = cliente.getDirecciones().size() + 1;
-        String id;
-        do {
-            id = cliente.getId() + "-DIR-" + n++;
-        } while (contieneDireccion(cliente, id) || addressDao.buscarPropietario(id) != null);
-        return id;
-    }
-
-    private static boolean contieneDireccion(Customer cliente, String idDireccion) {
-        for (Address a : cliente.getDirecciones()) {
-            if (a.getId().equalsIgnoreCase(idDireccion)) {
-                return true;
-            }
-        }
-        return false;
-    }
 }

@@ -1,56 +1,60 @@
 package com.blinkdelivery.dao;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
- * Persistencia de la guía de seguimiento de cada pedido: el texto que el domiciliario
- * actualiza durante la entrega (por ejemplo, el número de guía o una nota de ubicación).
+ * Guía de seguimiento de cada pedido.
  * <p>
- * Va en un archivo aparte para no cambiar el formato de {@code orders.txt}.
- * Formato de cada línea: {@code idPedido;texto}. El texto no puede contener ';' ni saltos
- * de línea, así que se reemplazan por ',' y espacios al guardar.
+ * Nombre heredado: antes persistía en {@code data/guias_pedido.txt}. El esquema no tiene tabla
+ * para la guía, así que el texto se guarda en {@code pedido.notas}. Si el pedido no tiene texto,
+ * la guía se deriva del id y el estado actual, p. ej. {@code "Seguimiento PED-0003 · EN_CAMINO"}.
  * </p>
  */
 public class GuiaPedidoFileDao {
-    private static final String RUTA = "data/guias_pedido.txt";
 
     /**
-     * Devuelve la guía de todos los pedidos que la tienen.
-     *
-     * @return mapa id de pedido → texto de la guía
-     * @throws IOException si falla la lectura del archivo
+     * @return guía de cada pedido, por id ("PED-0003")
+     * @throws IOException si falla la base de datos
      */
     public Map<String, String> listar() throws IOException {
         Map<String, String> guias = new HashMap<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            int separador = linea.indexOf(';');
-            if (separador > 0) {
-                guias.put(linea.substring(0, separador), linea.substring(separador + 1));
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement("SELECT id_pedido, estado, notas FROM pedido");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String id = Ids.pedido(rs.getInt("id_pedido"));
+                String notas = rs.getString("notas");
+                guias.put(id, notas != null && !notas.isBlank() ? notas
+                        : "Seguimiento " + id + " · " + rs.getString("estado"));
             }
+        } catch (SQLException e) {
+            throw new IOException("No se pudieron leer las guías de la base de datos.", e);
         }
         return guias;
     }
 
     /**
-     * Establece la guía de un pedido, reemplazando la anterior si la había.
+     * Guarda el texto de la guía del pedido (sin punto y coma ni saltos de línea).
      *
-     * @param idPedido identificador del pedido
-     * @param texto    nuevo texto de la guía (puede ser vacío para borrarla)
-     * @throws IOException si falla la escritura en disco
+     * @param idPedido id del pedido ("PED-0003")
+     * @param texto    texto de la guía
+     * @throws IOException si falla la base de datos
      */
     public void guardar(String idPedido, String texto) throws IOException {
         String limpio = texto == null ? "" : texto.replace(';', ',').replaceAll("[\\r\\n]+", " ").trim();
-        List<String> lineas = new ArrayList<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            if (!linea.startsWith(idPedido + ";")) {
-                lineas.add(linea);
-            }
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement("UPDATE pedido SET notas = ? WHERE id_pedido = ?")) {
+            ps.setString(1, limpio.isEmpty() ? null : limpio);
+            ps.setInt(2, Ids.pedido(idPedido));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IOException("No se pudo guardar la guía en la base de datos.", e);
         }
-        lineas.add(idPedido + ";" + limpio);
-        ArchivoUtil.guardarArchivo(RUTA, lineas);
     }
 }

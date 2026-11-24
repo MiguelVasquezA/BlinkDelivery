@@ -2,52 +2,76 @@ package com.blinkdelivery.dao;
 
 import com.blinkdelivery.modelo.Rating;
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persistencia en archivo plano de las calificaciones (RN12–RN14).
+ * Persistencia de calificaciones sobre PostgreSQL (tabla {@code calificacion}).
  * <p>
- * Formato de cada línea:
- * {@code id;idPedido;idCliente;idRestaurante;estrellas;comentario;fecha;idDomiciliario}.
- * El último campo va vacío cuando la calificación es para el restaurante. Las líneas
- * antiguas de 7 campos se leen como calificaciones de restaurante.
+ * Nombre heredado: antes persistía en {@code data/ratings.txt}. Cada pedido admite una
+ * calificación al restaurante ({@code id_domiciliario IS NULL}) y otra al domiciliario
+ * ({@code id_domiciliario IS NOT NULL}); los índices únicos de la migración 007 lo garantizan.
  * </p>
  *
  * @author BlinkDelivery
- * @version 2.0
+ * @version 3.0
  */
 public class RatingFileDao {
-    private static final String RUTA = "data/ratings.txt";
+    private static final String SELECCION = """
+            SELECT id_calificacion, id_pedido, id_cliente, id_restaurante, id_domiciliario,
+                   puntuacion, comentario, fecha
+              FROM calificacion
+            """;
 
     /**
      * Guarda una calificación nueva.
      *
-     * @param r Calificación a guardar.
-     * @throws IOException Si falla la escritura en disco.
+     * @param r calificación a guardar
+     * @throws IOException si falla la base de datos
      */
     public void guardar(Rating r) throws IOException {
-        List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(r.getId() + ";" + r.getOrderId() + ";" + r.getCustomerId() + ";" + r.getRestaurantId()
-                + ";" + r.getEstrellas() + ";" + r.getComentario() + ";" + r.getFecha()
-                + ";" + (r.getDomiciliarioId() == null ? "" : r.getDomiciliarioId()));
-        ArchivoUtil.guardarArchivo(RUTA, lineas);
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO calificacion (id_calificacion, id_pedido, id_cliente, id_restaurante, "
+                             + "id_domiciliario, puntuacion, comentario, fecha) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, Ids.calificacion(r.getId()));
+            ps.setInt(2, Ids.pedido(r.getOrderId()));
+            ps.setInt(3, Ids.entero(r.getCustomerId()));
+            ps.setInt(4, Ids.entero(r.getRestaurantId()));
+            if (r.esDeDomiciliario()) {
+                ps.setInt(5, Ids.entero(r.getDomiciliarioId()));
+            } else {
+                ps.setNull(5, Types.INTEGER);
+            }
+            ps.setInt(6, r.getEstrellas());
+            ps.setString(7, r.getComentario().isEmpty() ? null : r.getComentario());
+            ps.setObject(8, OrderFileDao.aFechaBase(r.getFecha()));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IOException("No se pudo guardar la calificación en la base de datos.", e);
+        }
     }
 
     /**
-     * @return Todas las calificaciones registradas (de restaurante y de domiciliario).
-     * @throws IOException Si falla la lectura del archivo.
+     * @return Todas las calificaciones (de restaurante y de domiciliario), por id.
+     * @throws IOException si falla la base de datos
      */
     public List<Rating> listar() throws IOException {
         List<Rating> ratings = new ArrayList<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == 7 || p.length == 8) {
-                String domiciliario = p.length == 8 ? p[7] : null;
-                ratings.add(new Rating(p[0], p[1], p[2], p[3], Integer.parseInt(p[4]), p[5],
-                        LocalDateTime.parse(p[6]), domiciliario));
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(SELECCION + " ORDER BY id_calificacion");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                ratings.add(mapear(rs));
             }
+        } catch (SQLException e) {
+            throw new IOException("No se pudieron leer las calificaciones de la base de datos.", e);
         }
         return ratings;
     }
@@ -55,41 +79,47 @@ public class RatingFileDao {
     /**
      * Calificación del restaurante de un pedido (no la del domiciliario).
      *
-     * @param idPedido Pedido calificado.
-     * @return La calificación al restaurante, o {@code null} si aún no existe.
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idPedido pedido calificado
+     * @return la calificación al restaurante, o {@code null} si aún no existe
+     * @throws IOException si falla la base de datos
      */
     public Rating buscarPorPedido(String idPedido) throws IOException {
         return buscarPorPedido(idPedido, null);
     }
 
     /**
-     * @param idPedido       Pedido calificado.
-     * @param idDomiciliario Domiciliario calificado, o {@code null} para la calificación del restaurante.
-     * @return La calificación indicada, o {@code null} si aún no existe.
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idPedido       pedido calificado
+     * @param idDomiciliario domiciliario calificado, o {@code null} para la calificación del restaurante
+     * @return la calificación indicada, o {@code null} si aún no existe
+     * @throws IOException si falla la base de datos
      */
     public Rating buscarPorPedido(String idPedido, String idDomiciliario) throws IOException {
-        for (Rating r : listar()) {
-            boolean mismoTipo = idDomiciliario == null
-                    ? !r.esDeDomiciliario()
-                    : idDomiciliario.equalsIgnoreCase(r.getDomiciliarioId());
-            if (r.getOrderId().equalsIgnoreCase(idPedido) && mismoTipo) {
-                return r;
+        String condicion = idDomiciliario == null
+                ? " AND id_domiciliario IS NULL"
+                : " AND id_domiciliario = ?";
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(SELECCION + " WHERE id_pedido = ?" + condicion)) {
+            ps.setInt(1, Ids.pedido(idPedido));
+            if (idDomiciliario != null) {
+                ps.setInt(2, Ids.entero(idDomiciliario));
             }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? mapear(rs) : null;
+            }
+        } catch (SQLException e) {
+            throw new IOException("No se pudo consultar la calificación en la base de datos.", e);
         }
-        return null;
     }
 
     /**
-     * @param idRestaurante Restaurante calificado.
-     * @return Calificaciones al restaurante (vacía si no tiene; no incluye las de domiciliario).
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idRestaurante restaurante calificado
+     * @return calificaciones al restaurante (no incluye las de domiciliario)
+     * @throws IOException si falla la base de datos
      */
     public List<Rating> listarPorRestaurante(String idRestaurante) throws IOException {
         List<Rating> resultado = new ArrayList<>();
         for (Rating r : listar()) {
-            if (!r.esDeDomiciliario() && r.getRestaurantId().equalsIgnoreCase(idRestaurante)) {
+            if (!r.esDeDomiciliario() && r.getRestaurantId().equals(idRestaurante)) {
                 resultado.add(r);
             }
         }
@@ -97,14 +127,14 @@ public class RatingFileDao {
     }
 
     /**
-     * @param idDomiciliario Domiciliario calificado.
-     * @return Calificaciones recibidas por el domiciliario (vacía si no tiene).
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idDomiciliario domiciliario calificado
+     * @return calificaciones recibidas por el domiciliario
+     * @throws IOException si falla la base de datos
      */
     public List<Rating> listarPorDomiciliario(String idDomiciliario) throws IOException {
         List<Rating> resultado = new ArrayList<>();
         for (Rating r : listar()) {
-            if (idDomiciliario.equalsIgnoreCase(r.getDomiciliarioId())) {
+            if (idDomiciliario.equals(r.getDomiciliarioId())) {
                 resultado.add(r);
             }
         }
@@ -112,17 +142,35 @@ public class RatingFileDao {
     }
 
     /**
-     * @param idCliente Cliente que calificó.
-     * @return Calificaciones hechas por el cliente (vacía si no tiene).
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idCliente cliente que calificó
+     * @return calificaciones hechas por el cliente
+     * @throws IOException si falla la base de datos
      */
     public List<Rating> listarPorCliente(String idCliente) throws IOException {
         List<Rating> resultado = new ArrayList<>();
         for (Rating r : listar()) {
-            if (r.getCustomerId().equalsIgnoreCase(idCliente)) {
+            if (r.getCustomerId().equals(idCliente)) {
                 resultado.add(r);
             }
         }
         return resultado;
+    }
+
+    // ------------------------------------------------------------ auxiliares
+
+    private static Rating mapear(ResultSet rs) throws SQLException {
+        int idDomiciliario = rs.getInt("id_domiciliario");
+        String domiciliario = rs.wasNull() ? null : String.valueOf(idDomiciliario);
+        String comentario = rs.getString("comentario");
+        OffsetDateTime fecha = rs.getObject("fecha", OffsetDateTime.class);
+        return new Rating(
+                Ids.calificacion(rs.getInt("id_calificacion")),
+                Ids.pedido(rs.getInt("id_pedido")),
+                String.valueOf(rs.getInt("id_cliente")),
+                String.valueOf(rs.getInt("id_restaurante")),
+                rs.getInt("puntuacion"),
+                comentario == null ? "" : comentario,
+                OrderFileDao.aFechaLocal(fecha),
+                domiciliario);
     }
 }
