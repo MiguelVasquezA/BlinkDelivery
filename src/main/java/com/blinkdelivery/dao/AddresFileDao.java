@@ -37,7 +37,7 @@ public class AddresFileDao {
             int id = insertar(c, idCliente, direccion, !tienePrincipal(c, Ids.entero(idCliente)));
             return copiaConId(direccion, id);
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar la dirección en la base de datos.", e);
+            throw Db.error("No se pudo guardar la dirección en la base de datos.", e);
         }
     }
 
@@ -62,7 +62,7 @@ public class AddresFileDao {
                 }
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer las direcciones de la base de datos.", e);
+            throw Db.error("No se pudieron leer las direcciones de la base de datos.", e);
         }
         return direcciones;
     }
@@ -83,7 +83,7 @@ public class AddresFileDao {
                 return rs.next() ? String.valueOf(rs.getInt(1)) : null;
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar la dirección en la base de datos.", e);
+            throw Db.error("No se pudo consultar la dirección en la base de datos.", e);
         }
     }
 
@@ -103,7 +103,7 @@ public class AddresFileDao {
             ps.setInt(1, Ids.entero(idDireccion));
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new IOException("No se pudo eliminar la dirección en la base de datos.", e);
+            throw Db.error("No se pudo eliminar la dirección en la base de datos.", e);
         }
     }
 

@@ -71,7 +71,7 @@ public class RestaurantFileDao {
             vincularTipo(c, restaurant.getId(), restaurant.getTipoCocina());
             c.commit();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar el restaurante en la base de datos.", e);
+            throw Db.error("No se pudo guardar el restaurante en la base de datos.", e);
         }
     }
 
@@ -88,7 +88,7 @@ public class RestaurantFileDao {
                 restaurants.add(mapear(rs));
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer los restaurantes de la base de datos.", e);
+            throw Db.error("No se pudieron leer los restaurantes de la base de datos.", e);
         }
         return restaurants;
     }
@@ -109,7 +109,7 @@ public class RestaurantFileDao {
                 return rs.next() ? mapear(rs) : null;
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar el restaurante en la base de datos.", e);
+            throw Db.error("No se pudo consultar el restaurante en la base de datos.", e);
         }
     }
 
@@ -137,7 +137,7 @@ public class RestaurantFileDao {
             reemplazarTipo(c, restaurant.getId(), restaurant.getTipoCocina());
             c.commit();
         } catch (SQLException e) {
-            throw new IOException("No se pudo actualizar el restaurante en la base de datos.", e);
+            throw Db.error("No se pudo actualizar el restaurante en la base de datos.", e);
         }
     }
 

@@ -54,7 +54,7 @@ public class RatingFileDao {
             ps.setObject(8, OrderFileDao.aFechaBase(r.getFecha()));
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar la calificación en la base de datos.", e);
+            throw Db.error("No se pudo guardar la calificación en la base de datos.", e);
         }
     }
 
@@ -71,7 +71,7 @@ public class RatingFileDao {
                 ratings.add(mapear(rs));
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer las calificaciones de la base de datos.", e);
+            throw Db.error("No se pudieron leer las calificaciones de la base de datos.", e);
         }
         return ratings;
     }
@@ -107,7 +107,7 @@ public class RatingFileDao {
                 return rs.next() ? mapear(rs) : null;
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar la calificación en la base de datos.", e);
+            throw Db.error("No se pudo consultar la calificación en la base de datos.", e);
         }
     }
 

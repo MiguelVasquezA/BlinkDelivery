@@ -90,7 +90,7 @@ public class OrderFileDao {
             }
             c.commit();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar el pedido en la base de datos.", e);
+            throw Db.error("No se pudo guardar el pedido en la base de datos.", e);
         }
     }
 
@@ -114,7 +114,7 @@ public class OrderFileDao {
             ps.setInt(4, Ids.pedido(order.getId()));
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo actualizar el pedido en la base de datos.", e);
+            throw Db.error("No se pudo actualizar el pedido en la base de datos.", e);
         }
     }
 
@@ -164,7 +164,7 @@ public class OrderFileDao {
                 }
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer los pedidos de la base de datos.", e);
+            throw Db.error("No se pudieron leer los pedidos de la base de datos.", e);
         }
         return pedidos;
     }
