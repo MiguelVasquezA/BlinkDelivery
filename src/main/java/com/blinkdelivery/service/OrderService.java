@@ -14,8 +14,8 @@ import com.blinkdelivery.modelo.OrderStatus;
 import com.blinkdelivery.modelo.OrderStatusChange;
 import com.blinkdelivery.modelo.Product;
 import com.blinkdelivery.modelo.Restaurant;
+import com.blinkdelivery.modelo.ZonaHoraria;
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -538,7 +538,7 @@ public class OrderService {
 
     /** Registra el estado actual del pedido en el historial (RN18). */
     private void registrarHistorial(Order pedido) throws IOException {
-        historialDao.guardar(new OrderStatusChange(pedido.getId(), pedido.getEstado(), LocalDateTime.now()));
+        historialDao.guardar(new OrderStatusChange(pedido.getId(), pedido.getEstado(), ZonaHoraria.ahora()));
     }
 
     /** Marca como disponible al domiciliario asignado a un pedido, si tiene uno. */
