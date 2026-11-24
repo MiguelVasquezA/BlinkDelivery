@@ -118,7 +118,7 @@ public class AddresFileDao {
                 ? "INSERT INTO direccion (id_direccion, id_cliente, alias, direccion_texto, barrio, ciudad, "
                         + "referencia, es_principal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 : "INSERT INTO direccion (id_cliente, alias, direccion_texto, barrio, ciudad, referencia, "
-                        + "es_principal) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id_direccion";
+                        + "es_principal) VALUES (?, ?, ?, ?, ?, ?, ?)";
         boolean conId = Ids.esEntero(d.getId());
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             int i = 1;
@@ -132,13 +132,16 @@ public class AddresFileDao {
             ps.setString(i++, d.getCiudad());
             ps.setString(i++, emptyToNull(d.getReferencia()));
             ps.setBoolean(i, principal);
+            ps.executeUpdate();
             if (conId) {
-                ps.executeUpdate();
                 return Ids.entero(d.getId());
             }
-            try (ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                return rs.getInt(1);
+            // Sin id explícito, la base asigna la identidad y la devuelve como clave generada.
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (!keys.next()) {
+                    throw new SQLException("La base no devolvió el id de la dirección nueva.");
+                }
+                return keys.getInt(1);
             }
         }
     }
