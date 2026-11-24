@@ -68,7 +68,7 @@ public class DriverFileDao {
                 drivers.add(mapear(rs));
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer los domiciliarios de la base de datos.", e);
+            throw Db.error("No se pudieron leer los domiciliarios de la base de datos.", e);
         }
         return drivers;
     }
@@ -89,7 +89,7 @@ public class DriverFileDao {
                 return rs.next() ? mapear(rs) : null;
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar el domiciliario en la base de datos.", e);
+            throw Db.error("No se pudo consultar el domiciliario en la base de datos.", e);
         }
     }
 
@@ -114,7 +114,7 @@ public class DriverFileDao {
             }
             c.commit();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar el domiciliario en la base de datos.", e);
+            throw Db.error("No se pudo guardar el domiciliario en la base de datos.", e);
         }
     }
 

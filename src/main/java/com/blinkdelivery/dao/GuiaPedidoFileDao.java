@@ -34,7 +34,7 @@ public class GuiaPedidoFileDao {
                         : "Seguimiento " + id + " · " + rs.getString("estado"));
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer las guías de la base de datos.", e);
+            throw Db.error("No se pudieron leer las guías de la base de datos.", e);
         }
         return guias;
     }
@@ -54,7 +54,7 @@ public class GuiaPedidoFileDao {
             ps.setInt(2, Ids.pedido(idPedido));
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar la guía en la base de datos.", e);
+            throw Db.error("No se pudo guardar la guía en la base de datos.", e);
         }
     }
 }

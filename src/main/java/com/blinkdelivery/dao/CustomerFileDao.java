@@ -60,7 +60,7 @@ public class CustomerFileDao {
             }
             c.commit();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar el cliente en la base de datos.", e);
+            throw Db.error("No se pudo guardar el cliente en la base de datos.", e);
         }
     }
 
@@ -77,7 +77,7 @@ public class CustomerFileDao {
                 clientes.add(mapear(rs, new AddresFileDao()));
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer los clientes de la base de datos.", e);
+            throw Db.error("No se pudieron leer los clientes de la base de datos.", e);
         }
         return clientes;
     }
@@ -98,7 +98,7 @@ public class CustomerFileDao {
                 return rs.next() ? mapear(rs, new AddresFileDao()) : null;
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar el cliente en la base de datos.", e);
+            throw Db.error("No se pudo consultar el cliente en la base de datos.", e);
         }
     }
 
@@ -123,7 +123,7 @@ public class CustomerFileDao {
             }
             c.commit();
         } catch (SQLException e) {
-            throw new IOException("No se pudo actualizar el cliente en la base de datos.", e);
+            throw Db.error("No se pudo actualizar el cliente en la base de datos.", e);
         }
     }
 

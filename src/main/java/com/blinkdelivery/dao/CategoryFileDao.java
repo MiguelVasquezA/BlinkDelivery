@@ -37,7 +37,7 @@ public class CategoryFileDao {
             ps.setString(2, categoria.getNombre());
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar la categoría en la base de datos.", e);
+            throw Db.error("No se pudo guardar la categoría en la base de datos.", e);
         }
     }
 
@@ -90,7 +90,7 @@ public class CategoryFileDao {
             ps.setInt(2, aEntero(idCategoria));
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo vincular la categoría en la base de datos.", e);
+            throw Db.error("No se pudo vincular la categoría en la base de datos.", e);
         }
     }
 
@@ -108,7 +108,7 @@ public class CategoryFileDao {
             ps.setInt(2, aEntero(idCategoria));
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new IOException("No se pudo desvincular la categoría en la base de datos.", e);
+            throw Db.error("No se pudo desvincular la categoría en la base de datos.", e);
         }
     }
 
@@ -150,7 +150,7 @@ public class CategoryFileDao {
                 }
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer las categorías de la base de datos.", e);
+            throw Db.error("No se pudieron leer las categorías de la base de datos.", e);
         }
         return resultado;
     }
