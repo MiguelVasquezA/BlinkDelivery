@@ -1,5 +1,7 @@
 package com.blinkdelivery.modelo;
 
+import java.util.Locale;
+
 /**
  * Estados de disponibilidad de un {@link DeliveryDriver}.
  *
@@ -48,6 +50,43 @@ public enum DriverStatus {
             }
         }
         throw new IllegalArgumentException("Estado de domiciliario inválido: '" + texto + "'.");
+    }
+
+    /**
+     * Lee el estado tal como está guardado en {@code domiciliario.estado}. Acepta los nombres de
+     * la base ({@code disponible}, {@code ocupado}, {@code inactivo}) y los de la aplicación.
+     *
+     * @param texto valor leído de la base, en cualquier mayúscula o minúscula
+     * @return el estado correspondiente
+     * @throws IllegalArgumentException si el texto no corresponde a ningún estado
+     */
+    public static DriverStatus desdeBaseDatos(String texto) {
+        String clave = texto == null ? "" : texto.trim().toUpperCase(Locale.ROOT);
+        switch (clave) {
+            case "DISPONIBLE":
+            case "ACTIVO":
+                return DISPONIBLE;
+            case "EN_ENTREGA":
+            case "OCUPADO":
+                return EN_ENTREGA;
+            case "DESCONECTADO":
+            case "INACTIVO":
+                return DESCONECTADO;
+            default:
+                throw new IllegalArgumentException("Estado de domiciliario inválido en la base de datos: '" + texto + "'.");
+        }
+    }
+
+    /** Valor que se guarda en {@code domiciliario.estado} (minúsculas, según el check constraint). */
+    public String aBaseDatos() {
+        switch (this) {
+            case EN_ENTREGA:
+                return "ocupado";
+            case DESCONECTADO:
+                return "inactivo";
+            default:
+                return "disponible";
+        }
     }
 
     @Override

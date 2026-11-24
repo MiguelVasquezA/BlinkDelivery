@@ -109,7 +109,7 @@ public class DriverFileDao {
                             + "estado = EXCLUDED.estado")) {
                 ps.setInt(1, id);
                 ps.setString(2, vehiculo);
-                ps.setString(3, driver.getEstado().name());
+                ps.setString(3, driver.getEstado().aBaseDatos());
                 ps.executeUpdate();
             }
             c.commit();
@@ -134,7 +134,7 @@ public class DriverFileDao {
 
         DeliveryDriver d = new DeliveryDriver(id, nombre, telefono == null ? "" : telefono, tipo);
         d.setPlacaVehiculo(placa);
-        d.setEstado(DriverStatus.desdeTexto(rs.getString("estado")));
+        d.setEstado(DriverStatus.desdeBaseDatos(rs.getString("estado")));
         d.setEmail(id + DOMINIO_CORREO);
         return d;
     }
