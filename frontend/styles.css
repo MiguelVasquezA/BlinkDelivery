@@ -722,6 +722,28 @@ h1, h2, h3 {
 
 /* ---------- Tarjetas y rejillas ---------- */
 
+/* Ilustraciones de comida: altura fija para que las tarjetas de la rejilla queden uniformes. */
+.ilustracion-comida {
+  flex-shrink: 0;
+  height: 112px;
+  border-radius: 12px;
+  border: 1px solid var(--borde);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(168, 85, 247, 0.35), transparent 70%),
+    linear-gradient(160deg, #2a1d4a, #1b1b26);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ilustracion-comida svg {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+}
+
 .rejilla {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));

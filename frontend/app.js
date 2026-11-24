@@ -562,6 +562,7 @@ function resultadosExplorarHtml() {
   }
   return rejilla(visibles.map((r) => `
     <article class="tarjeta">
+      ${ilustracionPara(r.nombre, r.tipoCocina)}
       <h3>${esc(r.nombre)}</h3>
       <p>${esc(r.tipoCocina)}</p>
       <p>Horario: ${esc(r.horaApertura)} – ${esc(r.horaCierre)}</p>
@@ -587,6 +588,134 @@ function restauranteAbierto(id) {
   return Boolean(r && r.abierto);
 }
 
+// ================================================================ ilustraciones de comida (SVG propios)
+// Sin imágenes externas: cada ilustración es SVG dibujado aquí, así nunca depende de una URL que falle.
+
+/** Palabras clave (sin tildes, en minúsculas) que identifican el tipo de comida. El orden importa. */
+const REGLAS_COMIDA = [
+  { tipo: "sushi", claves: ["sushi", "roll", "nigiri", "sashimi", "maki", "koi", "salmon"] },
+  { tipo: "ramen", claves: ["ramen", "udon", "fideos"] },
+  { tipo: "wok", claves: ["wok", "chino", "china", "asiatica", "asiatico", "tailandes", "oriental", "teriyaki"] },
+  { tipo: "arroz", claves: ["arroz", "risotto", "paella", "bowl"] },
+  { tipo: "hamburguesa", claves: ["hamburguesa", "burger"] },
+  { tipo: "pizza", claves: ["pizza", "pizzeria"] },
+  { tipo: "pasta", claves: ["lasagna", "lasana", "pasta", "espagueti", "spaghetti", "fettuccine", "italiana", "italiano"] },
+  { tipo: "pollo", claves: ["pollo", "alitas", "wings", "nuggets"] },
+  { tipo: "carne", claves: ["carne", "asado", "churrasco", "parrilla", "costilla", "bistec"] },
+  { tipo: "taco", claves: ["taco", "taqueria", "burrito", "mexicana", "mexicano", "nachos", "quesadilla"] },
+  { tipo: "ensalada", claves: ["ensalada", "vegetariana", "vegetariano", "vegana", "vegano", "saludable"] },
+  { tipo: "pescado", claves: ["pescado", "marisco", "camaron", "ceviche", "atun", "filete"] },
+  { tipo: "postre", claves: ["postre", "torta", "tarta", "pastel", "brownie", "helado", "cupcake", "dulce", "galleta", "waffle", "churro"] },
+  { tipo: "bebida", claves: ["jugo", "bebida", "cafe", "te", "batido", "limonada", "gaseosa", "smoothie", "malteada"] },
+];
+
+/** Quita tildes y pasa a minúsculas: "Café" → "cafe". */
+function normalizarTexto(texto) {
+  return String(texto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Tipo de comida según el nombre y la categoría. Si nada coincide, "generico". */
+function tipoDeComida(...textos) {
+  const palabras = normalizarTexto(textos.join(" ")).split(/[^a-z]+/).filter(Boolean);
+  for (const regla of REGLAS_COMIDA) {
+    const coincide = regla.claves.some((clave) =>
+      palabras.some((p) => (clave.length <= 3 ? p === clave : p.startsWith(clave))));
+    if (coincide) return regla.tipo;
+  }
+  return "generico";
+}
+
+const PLATO_BASE = `
+  <ellipse cx="60" cy="80" rx="46" ry="8" fill="#000" opacity=".35"/>
+  <ellipse cx="60" cy="74" rx="46" ry="13" fill="#e9e4f5"/>
+  <ellipse cx="60" cy="72" rx="35" ry="9" fill="#ffffff"/>`;
+
+const DIBUJOS_COMIDA = {
+  sushi: () => `${PLATO_BASE}
+    <circle cx="44" cy="62" r="13" fill="#1f1f1f"/><circle cx="44" cy="62" r="9" fill="#f4f4f8"/><circle cx="44" cy="62" r="4" fill="#fb7185"/>
+    <circle cx="76" cy="62" r="13" fill="#1f1f1f"/><circle cx="76" cy="62" r="9" fill="#f4f4f8"/><circle cx="76" cy="62" r="4" fill="#f97316"/>
+    <path d="M52 40 l16 -6 l4 14 l-16 6 z" fill="#fb923c"/><path d="M52 40 l16 -6" stroke="#fdba74" stroke-width="2"/>`,
+  ramen: () => `
+    <path d="M30 56 h60 a30 22 0 0 1 -60 0 z" fill="#8b5a2b"/>
+    <ellipse cx="60" cy="56" rx="30" ry="6" fill="#f59e0b"/>
+    <path d="M40 54 q6 -6 12 0 t12 0 t12 0" stroke="#fde68a" stroke-width="3" fill="none"/>
+    <circle cx="74" cy="50" r="6" fill="#fff7ed"/><circle cx="74" cy="50" r="2.5" fill="#f59e0b"/>
+    <path d="M48 36 q-4 -8 0 -14 M62 34 q-4 -8 0 -14 M76 36 q-4 -8 0 -14" stroke="#c4b5fd" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".7"/>`,
+  wok: () => `
+    <ellipse cx="60" cy="68" rx="40" ry="12" fill="#374151"/><ellipse cx="60" cy="64" rx="34" ry="8" fill="#4b5563"/>
+    <circle cx="44" cy="62" r="6" fill="#22c55e"/><circle cx="60" cy="58" r="6" fill="#ef4444"/>
+    <circle cx="74" cy="63" r="6" fill="#facc15"/><circle cx="52" cy="66" r="4" fill="#f97316"/>
+    <path d="M30 48 q10 -12 22 -2 M62 40 q10 -10 24 0" stroke="#fde68a" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+  arroz: () => `
+    <path d="M32 58 h56 a28 20 0 0 1 -56 0 z" fill="#ffffff"/>
+    <path d="M32 58 h56" stroke="#e5e7eb" stroke-width="2"/>
+    ${[...Array(12)].map((_, i) => `<ellipse cx="${40 + (i % 6) * 8}" cy="${52 + Math.floor(i / 6) * 6}" rx="3" ry="1.5" fill="#fef3c7"/>`).join("")}
+    <circle cx="48" cy="50" r="3" fill="#22c55e"/><circle cx="70" cy="49" r="3" fill="#22c55e"/><circle cx="60" cy="54" r="3" fill="#16a34a"/>`,
+  hamburguesa: () => `${PLATO_BASE}
+    <path d="M36 40 q24 -18 48 0 z" fill="#f59e0b"/>
+    <path d="M34 46 q6 -4 10 0 t10 0 t10 0 t10 0 t10 0 t10 0 v4 h-52 z" fill="#22c55e"/>
+    <rect x="34" y="50" width="52" height="7" rx="3.5" fill="#facc15"/>
+    <rect x="36" y="57" width="48" height="8" rx="4" fill="#7c2d12"/>
+    <path d="M36 65 h48 a2 2 0 0 1 0 4 h-48 a2 2 0 0 1 0 -4 z" fill="#d97706"/>`,
+  pizza: () => `${PLATO_BASE}
+    <path d="M60 30 L88 74 Q60 84 32 74 Z" fill="#facc15"/>
+    <path d="M32 74 Q60 84 88 74 L88 78 Q60 88 32 78 Z" fill="#d97706"/>
+    <circle cx="56" cy="50" r="5" fill="#dc2626"/><circle cx="68" cy="60" r="5" fill="#dc2626"/><circle cx="54" cy="66" r="4" fill="#dc2626"/>
+    <circle cx="64" cy="44" r="2" fill="#22c55e"/><circle cx="66" cy="72" r="2" fill="#22c55e"/>`,
+  pasta: () => `${PLATO_BASE}
+    <path d="M40 66 q10 -10 20 0 t20 0 M38 60 q12 -10 22 0 t22 0 M42 72 q10 -8 20 0 t20 0" stroke="#facc15" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <ellipse cx="60" cy="62" rx="16" ry="5" fill="#dc2626" opacity=".85"/>
+    <circle cx="50" cy="60" r="2" fill="#22c55e"/><circle cx="70" cy="62" r="2" fill="#22c55e"/>`,
+  pollo: () => `${PLATO_BASE}
+    <ellipse cx="56" cy="60" rx="18" ry="12" fill="#b45309" transform="rotate(-18 56 60)"/>
+    <ellipse cx="54" cy="58" rx="13" ry="8" fill="#d97706" transform="rotate(-18 54 58)"/>
+    <path d="M68 52 l10 -8 M70 56 l10 -4" stroke="#f5f5f4" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="80" cy="42" r="5" fill="#f5f5f4"/><circle cx="84" cy="48" r="4" fill="#f5f5f4"/>`,
+  carne: () => `${PLATO_BASE}
+    <path d="M32 66 q4 -22 28 -22 q26 0 28 20 q-2 12 -28 12 q-26 0 -28 -10 z" fill="#7f1d1d"/>
+    <path d="M42 62 l10 -8 M54 66 l10 -8 M66 62 l10 -8" stroke="#1c1917" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M44 52 q6 -4 12 0" stroke="#fca5a5" stroke-width="2" fill="none" opacity=".6"/>`,
+  taco: () => `${PLATO_BASE}
+    <path d="M34 70 q26 -44 52 0 z" fill="#f4c27a"/>
+    <path d="M40 66 q20 -26 40 0" stroke="#d97706" stroke-width="2" fill="none"/>
+    <circle cx="52" cy="58" r="5" fill="#22c55e"/><circle cx="64" cy="56" r="5" fill="#ef4444"/><circle cx="74" cy="60" r="4" fill="#facc15"/>`,
+  ensalada: () => `
+    <path d="M30 56 h60 a30 22 0 0 1 -60 0 z" fill="#f5f5f4"/>
+    <ellipse cx="60" cy="56" rx="30" ry="6" fill="#ffffff"/>
+    <path d="M40 50 q-8 -14 4 -18 q6 10 -4 18 z" fill="#16a34a"/>
+    <path d="M56 46 q-6 -16 8 -20 q8 12 -8 20 z" fill="#22c55e"/>
+    <path d="M72 50 q10 -12 0 -18 q-10 12 0 18 z" fill="#15803d"/>
+    <circle cx="48" cy="58" r="5" fill="#ef4444"/><circle cx="74" cy="60" r="4" fill="#fb923c"/>`,
+  pescado: () => `${PLATO_BASE}
+    <ellipse cx="58" cy="62" rx="26" ry="13" fill="#38bdf8"/>
+    <path d="M82 62 L100 50 L100 74 Z" fill="#0284c7"/>
+    <circle cx="46" cy="59" r="3" fill="#0c4a6e"/>
+    <path d="M52 56 q8 6 0 12 M60 56 q8 6 0 12" stroke="#7dd3fc" stroke-width="2" fill="none"/>`,
+  postre: () => `${PLATO_BASE}
+    <rect x="40" y="52" width="40" height="18" rx="3" fill="#f472b6"/>
+    <rect x="40" y="46" width="40" height="8" rx="3" fill="#fbcfe8"/>
+    <path d="M40 46 q5 -5 10 0 t10 0 t10 0 t10 0" stroke="#ffffff" stroke-width="2" fill="none"/>
+    <circle cx="60" cy="40" r="5" fill="#dc2626"/>`,
+  bebida: () => `
+    <path d="M44 34 L76 34 L72 78 Q71 82 66 82 L54 82 Q49 82 48 78 Z" fill="#c4b5fd" opacity=".9"/>
+    <path d="M47 50 L73 50 L72 78 Q71 82 66 82 L54 82 Q49 82 48 78 Z" fill="#a855f7"/>
+    <rect x="58" y="18" width="4" height="22" rx="2" fill="#f472b6" transform="rotate(12 60 30)"/>
+    <ellipse cx="60" cy="34" rx="16" ry="3" fill="#ffffff" opacity=".6"/>`,
+  generico: () => `${PLATO_BASE}
+    <circle cx="60" cy="66" r="14" fill="#f5f3ff" opacity=".9"/>
+    <path d="M22 50 v26 M20 50 v8 q3 3 4 0 v-8 M24 50 v8 q-3 3 -4 0" stroke="#c4b5fd" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M98 50 v26 M98 50 q6 0 6 10 h-6" stroke="#c4b5fd" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+};
+
+/** Ilustración para un restaurante o producto, elegida por palabras del nombre y la categoría. */
+function ilustracionPara(nombre, categoria) {
+  const tipo = tipoDeComida(nombre, categoria);
+  const dibujo = DIBUJOS_COMIDA[tipo] || DIBUJOS_COMIDA.generico;
+  return `<div class="ilustracion-comida ilustracion-${tipo}" aria-hidden="true">
+    <svg viewBox="0 0 120 96" focusable="false">${dibujo()}</svg>
+  </div>`;
+}
+
 function tarjetaProductoHtml(p) {
   const cantidad = cantidadesMenu.get(p.id) || 1;
   const abierto = restauranteAbierto(p.restauranteId);
@@ -594,6 +723,7 @@ function tarjetaProductoHtml(p) {
   const motivo = !p.disponible ? "Este plato está agotado." : !abierto ? "El restaurante está cerrado." : "";
   return `
     <article class="tarjeta">
+      ${ilustracionPara(p.nombre, p.categoria || p.descripcion)}
       <div class="pie"><h3>${esc(p.nombre)}</h3>${p.disponible ? insignia("Disponible", "ok") : insignia("Agotado", "peligro")}</div>
       <p>${esc(p.descripcion)}</p>
       <p>${esc(nombreRestaurante(p.restauranteId))}</p>
