@@ -8,6 +8,7 @@ import com.blinkdelivery.modelo.Restaurant;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -58,6 +59,30 @@ public class RatingService {
      */
     public Rating registrarCalificacion(String idPedido, String idCliente, int puntuacion,
                                         String comentario) throws IOException {
+        return registrar(idPedido, idCliente, puntuacion, comentario, false);
+    }
+
+    /**
+     * Registra la calificación del domiciliario que entregó un pedido entregado. Es independiente
+     * de la calificación al restaurante: cada una tiene su propio duplicado.
+     *
+     * @param idPedido   pedido entregado con domiciliario asignado
+     * @param idCliente  cliente que califica (debe ser quien hizo el pedido)
+     * @param puntuacion valor entre 1 y 5
+     * @param comentario comentario opcional (máximo 200 caracteres)
+     * @return la calificación registrada
+     * @throws IOException              si ocurre un error al leer o escribir el archivo
+     * @throws IllegalArgumentException si los datos son inválidos o el pedido no existe
+     * @throws IllegalStateException    si el pedido no está entregado, no tiene domiciliario,
+     *                                  no es del cliente o ya calificó al domiciliario
+     */
+    public Rating registrarCalificacionDomiciliario(String idPedido, String idCliente, int puntuacion,
+                                                    String comentario) throws IOException {
+        return registrar(idPedido, idCliente, puntuacion, comentario, true);
+    }
+
+    private Rating registrar(String idPedido, String idCliente, int puntuacion, String comentario,
+                             boolean paraDomiciliario) throws IOException {
         String clienteId = ServiceValidations.texto(idCliente, "El id del cliente");
         validarPuntuacion(puntuacion);
         String comentarioLimpio = comentarioOpcional(comentario);
@@ -70,12 +95,20 @@ public class RatingService {
             throw new IllegalStateException("Solo se pueden calificar pedidos entregados (RN12). Estado actual: '"
                     + pedido.getEstado() + "'.");
         }
-        if (ratingDao.buscarPorPedido(pedido.getId()) != null) {
-            throw new IllegalStateException("El pedido " + pedido.getId() + " ya fue calificado.");
+        String domiciliarioId = null;
+        if (paraDomiciliario) {
+            if (!pedido.tieneDomiciliario()) {
+                throw new IllegalStateException("El pedido " + pedido.getId() + " no tiene domiciliario asignado.");
+            }
+            domiciliarioId = pedido.getDomiciliario().getIdentification();
+        }
+        if (ratingDao.buscarPorPedido(pedido.getId(), domiciliarioId) != null) {
+            throw new IllegalStateException("El pedido " + pedido.getId() + " ya fue calificado "
+                    + (paraDomiciliario ? "por el domiciliario." : "por el restaurante."));
         }
 
         Rating calificacion = new Rating(siguienteId(), pedido.getId(), clienteId, pedido.getRestaurantId(),
-                puntuacion, comentarioLimpio);
+                puntuacion, comentarioLimpio, LocalDateTime.now(), domiciliarioId);
         ratingDao.guardar(calificacion);
         return calificacion;
     }

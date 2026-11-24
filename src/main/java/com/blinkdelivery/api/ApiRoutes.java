@@ -324,18 +324,52 @@ final class ApiRoutes {
     private List<Map<String, Object>> restaurantesConPromedio(List<Restaurant> lista) throws IOException {
         Map<String, List<Integer>> notas = new HashMap<>();
         for (Rating r : calificaciones.listar()) {
+            if (r.esDeDomiciliario()) continue; // las de domiciliario no cuentan para el restaurante
             notas.computeIfAbsent(r.getRestaurantId(), k -> new ArrayList<>()).add(r.getEstrellas());
         }
         List<Map<String, Object>> salida = new ArrayList<>();
         for (Restaurant r : lista) {
             Map<String, Object> mapa = aMapa(r);
             List<Integer> valores = notas.getOrDefault(r.getId(), List.of());
-            double promedio = valores.isEmpty() ? 0.0
-                    : valores.stream().mapToInt(Integer::intValue).average().orElse(0.0);
-            mapa.put("promedioCalificacion", promedio);
+            mapa.put("promedioCalificacion", promedioDe(valores));
+            mapa.put("totalCalificaciones", valores.size());
             salida.add(mapa);
         }
         return salida;
+    }
+
+    /**
+     * Mapea domiciliarios con su calificación real: promedio (1 decimal, 0 si no tiene),
+     * total de reseñas y la lista de calificaciones recibidas (más recientes primero).
+     */
+    private List<Map<String, Object>> domiciliariosConPromedio(List<DeliveryDriver> lista) throws IOException {
+        List<Map<String, Object>> salida = new ArrayList<>();
+        for (DeliveryDriver d : lista) {
+            List<Rating> recibidas = new ArrayList<>(calificaciones.listarPorDomiciliario(d.getIdentification()));
+            recibidas.sort((a, b) -> b.getFecha().compareTo(a.getFecha()));
+            List<Map<String, Object>> comentarios = new ArrayList<>();
+            List<Integer> valores = new ArrayList<>();
+            for (Rating r : recibidas) {
+                valores.add(r.getEstrellas());
+                comentarios.add(campos("pedidoId", r.getOrderId(), "estrellas", r.getEstrellas(),
+                        "comentario", r.getComentario(), "fecha", String.valueOf(r.getFecha())));
+            }
+            Map<String, Object> mapa = aMapa(d);
+            double promedio = promedioDe(valores);
+            mapa.put("calificacionPromedio", promedio);
+            mapa.put("promedioCalificacion", promedio);
+            mapa.put("totalCalificaciones", valores.size());
+            mapa.put("comentarios", comentarios);
+            salida.add(mapa);
+        }
+        return salida;
+    }
+
+    /** COALESCE(ROUND(AVG(estrellas), 1), 0): promedio con un decimal, 0 si no hay valores. */
+    private static double promedioDe(List<Integer> valores) {
+        if (valores.isEmpty()) return 0.0;
+        double media = valores.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+        return Math.round(media * 10.0) / 10.0;
     }
 
     // ------------------------------------------------------------ productos
@@ -406,7 +440,7 @@ final class ApiRoutes {
 
     private Respuesta domiciliarios(String m, List<String> seg, String cuerpo) throws IOException {
         if (seg.size() == 1) {
-            if (m.equals("GET")) return ok(mapear(domiciliarios.listar(), ApiRoutes::aMapa));
+            if (m.equals("GET")) return ok(domiciliariosConPromedio(domiciliarios.listar()));
             if (m.equals("POST")) {
                 Map<String, Object> d = Json.leerObjeto(cuerpo);
                 String id = texto(d, "identificacion", true);
@@ -420,7 +454,7 @@ final class ApiRoutes {
         }
         if (seg.size() == 2) {
             DeliveryDriver actual = domiciliarios.buscarPorId(seg.get(1));
-            if (m.equals("GET")) return ok(aMapa(existe(actual, "domiciliario", seg.get(1))));
+            if (m.equals("GET")) return ok(domiciliariosConPromedio(List.of(existe(actual, "domiciliario", seg.get(1)))).get(0));
             if (m.equals("PUT")) {
                 existe(actual, "domiciliario", seg.get(1));
                 Map<String, Object> d = Json.leerObjeto(cuerpo);
@@ -554,8 +588,16 @@ final class ApiRoutes {
                 if (estrellas != Math.floor(estrellas)) {
                     throw new IllegalArgumentException("Las estrellas deben ser un número entero.");
                 }
-                Rating r = servicioCalificaciones.registrarCalificacion(texto(d, "pedidoId", true),
-                        texto(d, "clienteId", true), (int) estrellas, texto(d, "comentario", false));
+                String tipo = texto(d, "tipo", false);
+                boolean paraDomiciliario = "DOMICILIARIO".equalsIgnoreCase(tipo);
+                if (tipo != null && !paraDomiciliario && !"RESTAURANTE".equalsIgnoreCase(tipo)) {
+                    throw new IllegalArgumentException("El tipo de calificación debe ser RESTAURANTE o DOMICILIARIO.");
+                }
+                Rating r = paraDomiciliario
+                        ? servicioCalificaciones.registrarCalificacionDomiciliario(texto(d, "pedidoId", true),
+                                texto(d, "clienteId", true), (int) estrellas, texto(d, "comentario", false))
+                        : servicioCalificaciones.registrarCalificacion(texto(d, "pedidoId", true),
+                                texto(d, "clienteId", true), (int) estrellas, texto(d, "comentario", false));
                 return creado(aMapa(r));
             }
             throw noPermitido();
@@ -619,7 +661,9 @@ final class ApiRoutes {
     private static Map<String, Object> aMapa(Rating r) {
         return campos("id", r.getId(), "pedidoId", r.getOrderId(), "clienteId", r.getCustomerId(),
                 "restauranteId", r.getRestaurantId(), "estrellas", r.getEstrellas(),
-                "comentario", r.getComentario(), "fecha", String.valueOf(r.getFecha()));
+                "comentario", r.getComentario(), "fecha", String.valueOf(r.getFecha()),
+                "tipo", r.esDeDomiciliario() ? "DOMICILIARIO" : "RESTAURANTE",
+                "domiciliarioId", r.getDomiciliarioId());
     }
 
     private static Map<String, Object> aMapa(OrderStatusChange c) {
