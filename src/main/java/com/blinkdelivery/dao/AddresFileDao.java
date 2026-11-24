@@ -2,96 +2,173 @@ package com.blinkdelivery.dao;
 
 import com.blinkdelivery.modelo.Address;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persistencia en archivo plano de las direcciones adicionales de los clientes (RN01, RN02).
+ * DAO de direcciones de entrega sobre PostgreSQL (tabla {@code direccion}).
  * <p>
- * La dirección principal de cada cliente se sigue guardando en {@code customers.txt};
- * este archivo guarda las demás. Formato de cada línea:
- * {@code idDireccion;idCliente;etiqueta;direccionExacta;barrio;ciudad;referencia}.
+ * Nombre heredado: antes persistía en {@code data/addresses.txt}. El id de la dirección lo
+ * asigna la base de datos (columna de identidad); el barrio viene de la migración 009.
+ * La dirección principal es la primera que se registró para el cliente.
  * </p>
  *
  * @author BlinkDelivery
- * @version 1.0
+ * @version 2.0
  */
 public class AddresFileDao {
-    private static final String RUTA = "data/addresses.txt";
-    private static final int CAMPOS = 7;
 
     /**
-     * Guarda una dirección asociada a un cliente.
+     * Guarda una dirección del cliente. Si el id de la dirección es numérico se usa ese;
+     * si no, la base de datos asigna uno.
      *
-     * @param idCliente Cliente dueño de la dirección.
-     * @param direccion Dirección a guardar.
-     * @throws IOException Si falla la escritura en disco.
+     * @param idCliente id del cliente dueño
+     * @param direccion dirección a guardar
+     * @return la dirección con el id que quedó en la base de datos
+     * @throws IOException si falla la base de datos
      */
-    public void guardar(String idCliente, Address direccion) throws IOException {
-        List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(toRegistro(idCliente, direccion));
-        ArchivoUtil.guardarArchivo(RUTA, lineas);
+    public Address guardar(String idCliente, Address direccion) throws IOException {
+        try (Connection c = Db.conectar()) {
+            int id = insertar(c, idCliente, direccion, !tienePrincipal(c, Ids.entero(idCliente)));
+            return copiaConId(direccion, id);
+        } catch (SQLException e) {
+            throw new IOException("No se pudo guardar la dirección en la base de datos.", e);
+        }
     }
 
     /**
-     * Lista las direcciones adicionales de un cliente.
-     *
-     * @param idCliente Cliente a consultar.
-     * @return Direcciones del cliente (vacía si no tiene adicionales).
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idCliente cliente a consultar
+     * @return direcciones del cliente, la principal primero (vacía si no tiene)
+     * @throws IOException si falla la base de datos
      */
     public List<Address> listarPorCliente(String idCliente) throws IOException {
         List<Address> direcciones = new ArrayList<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == CAMPOS && p[1].equalsIgnoreCase(idCliente)) {
-                direcciones.add(new Address(p[0], p[2], p[3], p[4], p[5], p[6]));
+        if (!Ids.esEntero(idCliente)) {
+            return direcciones;
+        }
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT id_direccion, alias, direccion_texto, barrio, ciudad, referencia "
+                             + "FROM direccion WHERE id_cliente = ? ORDER BY es_principal DESC, id_direccion")) {
+            ps.setInt(1, Ids.entero(idCliente));
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    direcciones.add(mapear(rs));
+                }
             }
+        } catch (SQLException e) {
+            throw new IOException("No se pudieron leer las direcciones de la base de datos.", e);
         }
         return direcciones;
     }
 
     /**
-     * Busca el cliente dueño de una dirección.
-     *
-     * @param idDireccion Identificador de la dirección.
-     * @return Id del cliente dueño, o {@code null} si la dirección no existe.
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idDireccion id de la dirección
+     * @return id del cliente dueño, o {@code null} si no existe
+     * @throws IOException si falla la base de datos
      */
     public String buscarPropietario(String idDireccion) throws IOException {
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == CAMPOS && p[0].equalsIgnoreCase(idDireccion)) {
-                return p[1];
-            }
+        if (!Ids.esEntero(idDireccion)) {
+            return null;
         }
-        return null;
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement("SELECT id_cliente FROM direccion WHERE id_direccion = ?")) {
+            ps.setInt(1, Ids.entero(idDireccion));
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? String.valueOf(rs.getInt(1)) : null;
+            }
+        } catch (SQLException e) {
+            throw new IOException("No se pudo consultar la dirección en la base de datos.", e);
+        }
     }
 
     /**
-     * Elimina una dirección adicional.
+     * Borra una dirección.
      *
-     * @param idDireccion Identificador de la dirección.
-     * @return {@code true} si se eliminó alguna línea.
-     * @throws IOException Si falla la lectura o escritura del archivo.
+     * @param idDireccion id de la dirección
+     * @return {@code true} si existía y se borró
+     * @throws IOException si falla la base de datos
      */
     public boolean eliminar(String idDireccion) throws IOException {
-        List<String> lineas = new ArrayList<>();
-        boolean eliminada = false;
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == CAMPOS && p[0].equalsIgnoreCase(idDireccion)) {
-                eliminada = true;
-            } else {
-                lineas.add(linea);
-            }
+        if (!Ids.esEntero(idDireccion)) {
+            return false;
         }
-        ArchivoUtil.guardarArchivo(RUTA, lineas);
-        return eliminada;
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement("DELETE FROM direccion WHERE id_direccion = ?")) {
+            ps.setInt(1, Ids.entero(idDireccion));
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new IOException("No se pudo eliminar la dirección en la base de datos.", e);
+        }
     }
 
-    private static String toRegistro(String idCliente, Address d) {
-        return d.getId() + ";" + idCliente + ";" + d.getEtiqueta() + ";" + d.getDireccionExacta() + ";"
-                + d.getBarrio() + ";" + d.getCiudad() + ";" + d.getReferencia();
+    // ------------------------------------------------------------ auxiliares
+
+    /**
+     * Inserta una dirección dentro de una transacción ya abierta y devuelve su id.
+     * Usado también por {@link CustomerFileDao} al registrar un cliente.
+     */
+    static int insertar(Connection c, String idCliente, Address d, boolean principal) throws SQLException {
+        String sql = Ids.esEntero(d.getId())
+                ? "INSERT INTO direccion (id_direccion, id_cliente, alias, direccion_texto, barrio, ciudad, "
+                        + "referencia, es_principal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                : "INSERT INTO direccion (id_cliente, alias, direccion_texto, barrio, ciudad, referencia, "
+                        + "es_principal) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id_direccion";
+        boolean conId = Ids.esEntero(d.getId());
+        try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            int i = 1;
+            if (conId) {
+                ps.setInt(i++, Ids.entero(d.getId()));
+            }
+            ps.setInt(i++, Ids.entero(idCliente));
+            ps.setString(i++, d.getEtiqueta());
+            ps.setString(i++, d.getDireccionExacta());
+            ps.setString(i++, emptyToNull(d.getBarrio()));
+            ps.setString(i++, d.getCiudad());
+            ps.setString(i++, emptyToNull(d.getReferencia()));
+            ps.setBoolean(i, principal);
+            if (conId) {
+                ps.executeUpdate();
+                return Ids.entero(d.getId());
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        }
+    }
+
+    private static boolean tienePrincipal(Connection c, int idCliente) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT 1 FROM direccion WHERE id_cliente = ? AND es_principal")) {
+            ps.setInt(1, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    private static Address mapear(ResultSet rs) throws SQLException {
+        String alias = rs.getString("alias");
+        return new Address(String.valueOf(rs.getInt("id_direccion")),
+                alias == null || alias.isBlank() ? "Sin etiqueta" : alias,
+                rs.getString("direccion_texto"),
+                rs.getString("barrio"),
+                rs.getString("ciudad"),
+                rs.getString("referencia"));
+    }
+
+    private static Address copiaConId(Address d, int id) {
+        return new Address(String.valueOf(id), d.getEtiqueta(), d.getDireccionExacta(), d.getBarrio(),
+                d.getCiudad(), d.getReferencia());
+    }
+
+    private static String emptyToNull(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim();
     }
 }
