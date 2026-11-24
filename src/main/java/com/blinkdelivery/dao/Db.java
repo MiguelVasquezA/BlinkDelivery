@@ -92,4 +92,14 @@ public final class Db {
         e.printStackTrace(System.err);
         return new java.io.IOException(detalle, e);
     }
+
+    /**
+     * Registra en consola una fila que no se pudo leer y la omite, para que una fila corrupta no
+     * tumbe todo el listado.
+     *
+     * @param e motivo por el que se omitió la fila
+     */
+    static void omitirFila(Exception e) {
+        System.err.println("Aviso fila omitida en un listado: " + e);
+    }
 }

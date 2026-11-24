@@ -1,12 +1,15 @@
 package com.blinkdelivery.modelo;
 
-import java.util.Locale;
-
 /**
  * Estados de disponibilidad de un {@link DeliveryDriver}.
+ * <p>
+ * Lectura desde la base: {@link #desdeBaseDatos} nunca lanza excepción; un texto desconocido se
+ * registra en consola y se devuelve {@link #DISPONIBLE}. Escritura: {@link #aBaseDatos()} devuelve
+ * el valor en minúsculas que exige el check constraint {@code estado_domiciliario_valido}.
+ * </p>
  *
  * @author Miguel Vasquez
- * @version 2.0
+ * @version 3.0
  */
 public enum DriverStatus {
     /** Conectado y libre para recibir un pedido. */
@@ -15,6 +18,9 @@ public enum DriverStatus {
     EN_ENTREGA("En entrega"),
     /** No está trabajando en este momento. */
     DESCONECTADO("Desconectado");
+
+    /** Valor por defecto cuando la base trae un estado desconocido. */
+    static final DriverStatus POR_DEFECTO = DISPONIBLE;
 
     private final String descripcion;
 
@@ -28,53 +34,48 @@ public enum DriverStatus {
     }
 
     /**
-     * Convierte un texto en un estado. Acepta el nombre de la constante, la
-     * descripción y los valores de la versión anterior {@code true} (disponible)
-     * y {@code false} (en entrega).
+     * Convierte un texto en un estado. Acepta el nombre de la constante, la descripción y los
+     * valores de la base. Nunca lanza excepción: un texto desconocido devuelve {@link #POR_DEFECTO}.
      *
-     * @param texto Texto a convertir.
+     * @param texto Texto a convertir (puede ser {@code null}).
      * @return El estado correspondiente.
-     * @throws IllegalArgumentException Si el texto es vacío o no corresponde a ningún estado.
      */
     public static DriverStatus desdeTexto(String texto) {
-        String clave = Validaciones.claveEnum(Validaciones.texto(texto, "El estado del domiciliario"));
-        if (clave.equals("TRUE")) {
-            return DISPONIBLE;
-        }
-        if (clave.equals("FALSE")) {
-            return EN_ENTREGA;
-        }
-        for (DriverStatus estado : values()) {
-            if (estado.name().equals(clave)) {
-                return estado;
-            }
-        }
-        throw new IllegalArgumentException("Estado de domiciliario inválido: '" + texto + "'.");
+        DriverStatus encontrado = buscar(texto);
+        return encontrado == null ? EnumTolerante.desconocido("DriverStatus", texto, POR_DEFECTO) : encontrado;
     }
 
     /**
-     * Lee el estado tal como está guardado en {@code domiciliario.estado}. Acepta los nombres de
-     * la base ({@code disponible}, {@code ocupado}, {@code inactivo}) y los de la aplicación.
+     * Convierte un texto escrito por el usuario (API o formulario). Rechaza los valores
+     * desconocidos en lugar de usar un valor por defecto.
      *
-     * @param texto valor leído de la base, en cualquier mayúscula o minúscula
-     * @return el estado correspondiente
      * @throws IllegalArgumentException si el texto no corresponde a ningún estado
      */
-    public static DriverStatus desdeBaseDatos(String texto) {
-        String clave = texto == null ? "" : texto.trim().toUpperCase(Locale.ROOT);
-        switch (clave) {
-            case "DISPONIBLE":
-            case "ACTIVO":
+    public static DriverStatus desdeEntrada(String texto) {
+        DriverStatus encontrado = buscar(texto);
+        if (encontrado == null) {
+            throw new IllegalArgumentException("Estado de domiciliario inválido: '" + texto + "'.");
+        }
+        return encontrado;
+    }
+
+    /** @return el estado que corresponde al texto, o {@code null} si no se reconoce. */
+    private static DriverStatus buscar(String texto) {
+        switch (EnumTolerante.clave(texto)) {
+            case "disponible": case "activo": case "available":
                 return DISPONIBLE;
-            case "EN_ENTREGA":
-            case "OCUPADO":
+            case "en_entrega": case "ocupado":
                 return EN_ENTREGA;
-            case "DESCONECTADO":
-            case "INACTIVO":
+            case "desconectado": case "inactivo":
                 return DESCONECTADO;
             default:
-                throw new IllegalArgumentException("Estado de domiciliario inválido en la base de datos: '" + texto + "'.");
+                return null;
         }
+    }
+
+    /** Lee el estado guardado en {@code domiciliario.estado}. Mismo criterio que {@link #desdeTexto}. */
+    public static DriverStatus desdeBaseDatos(String texto) {
+        return desdeTexto(texto);
     }
 
     /** Valor que se guarda en {@code domiciliario.estado} (minúsculas, según el check constraint). */

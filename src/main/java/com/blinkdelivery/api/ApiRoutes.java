@@ -465,7 +465,7 @@ final class ApiRoutes {
                 if (nombre != null) actual.setNombre(nombre);
                 if (telefono != null) actual.setTelefono(telefono);
                 if (tipo != null) actual.setTipoVehiculo(tipo);
-                if (estado != null) actual.setEstado(DriverStatus.desdeTexto(estado));
+                if (estado != null) actual.setEstado(DriverStatus.desdeEntrada(estado));
                 domiciliarios.actualizar(actual);
                 return ok(aMapa(actual));
             }
@@ -563,7 +563,7 @@ final class ApiRoutes {
      * Al pasar a "En camino" sin domiciliario, asigna el primero disponible (RN10).
      */
     private Order cambiarEstado(String idPedido, Map<String, Object> d) throws IOException {
-        OrderStatus destino = OrderStatus.desdeTexto(texto(d, "estado", true));
+        OrderStatus destino = OrderStatus.desdeEntrada(texto(d, "estado", true));
         Order actual = existe(servicioPedidos.buscarPorId(idPedido), "pedido", idPedido);
         if (destino == OrderStatus.EN_CAMINO && !actual.tieneDomiciliario()
                 && actual.getEstado().puedeCambiarA(destino)) {

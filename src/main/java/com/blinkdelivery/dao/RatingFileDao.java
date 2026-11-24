@@ -68,7 +68,7 @@ public class RatingFileDao {
              PreparedStatement ps = c.prepareStatement(SELECCION + " ORDER BY id_calificacion");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                ratings.add(mapear(rs));
+                try { ratings.add(mapear(rs)); } catch (SQLException | RuntimeException e) { Db.omitirFila(e); }
             }
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer las calificaciones de la base de datos.", e);

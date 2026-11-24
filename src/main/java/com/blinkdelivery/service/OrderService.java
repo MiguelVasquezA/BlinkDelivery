@@ -168,7 +168,7 @@ public class OrderService {
      * @throws IllegalStateException    si la transición no está permitida o falta el domiciliario
      */
     public Order cambiarEstado(String idPedido, String nuevoEstado) throws IOException {
-        return cambiarEstado(idPedido, OrderStatus.desdeTexto(nuevoEstado));
+        return cambiarEstado(idPedido, OrderStatus.desdeEntrada(nuevoEstado));
     }
 
     /**
@@ -395,7 +395,7 @@ public class OrderService {
      * @throws IllegalArgumentException si el estado es inválido
      */
     public List<Order> listarPorEstado(String estado) throws IOException {
-        OrderStatus buscado = OrderStatus.desdeTexto(estado);
+        OrderStatus buscado = OrderStatus.desdeEntrada(estado);
         List<Order> resultado = new ArrayList<>();
         for (Order o : orderDao.listar()) {
             if (o.getEstado() == buscado) {

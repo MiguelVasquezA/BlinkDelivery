@@ -65,7 +65,7 @@ public class DriverFileDao {
              PreparedStatement ps = c.prepareStatement(SELECCION + " ORDER BY p.id_persona");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                drivers.add(mapear(rs));
+                try { drivers.add(mapear(rs)); } catch (SQLException | RuntimeException e) { Db.omitirFila(e); }
             }
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer los domiciliarios de la base de datos.", e);

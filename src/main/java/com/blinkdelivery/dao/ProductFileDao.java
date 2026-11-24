@@ -115,7 +115,7 @@ public class ProductFileDao {
             }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    resultado.add(mapear(rs));
+                    try { resultado.add(mapear(rs)); } catch (SQLException | RuntimeException e) { Db.omitirFila(e); }
                 }
             }
         } catch (SQLException e) {

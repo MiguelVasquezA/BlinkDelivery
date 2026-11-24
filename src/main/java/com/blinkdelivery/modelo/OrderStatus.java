@@ -10,35 +10,53 @@ package com.blinkdelivery.modelo;
  * RECIBIDO → ACEPTADO → EN_PREPARACION → LISTO_PARA_ENTREGAR → EN_CAMINO → ENTREGADO
  * (cualquier estado anterior a EN_CAMINO) → CANCELADO
  * </pre>
+ * <p>
+ * Lectura y escritura con la base: {@link #desdeTexto} nunca lanza excepción (un valor desconocido
+ * se registra en consola y se devuelve {@link #RECIBIDO}); {@link #aBaseDatos()} devuelve el texto
+ * exacto que exige el check constraint {@code estado_pedido_valido}.
+ * </p>
  *
  * @author Miguel Vasquez
- * @version 2.0
+ * @version 3.0
  */
 public enum OrderStatus {
     /** El pedido fue registrado y espera respuesta del restaurante. */
-    RECIBIDO("Recibido"),
+    RECIBIDO("Recibido", "recibido"),
     /** El restaurante aceptó el pedido. */
-    ACEPTADO("Aceptado"),
+    ACEPTADO("Aceptado", "aceptado"),
     /** El restaurante está preparando el pedido. */
-    EN_PREPARACION("En preparación"),
+    EN_PREPARACION("En preparación", "en preparación"),
     /** El restaurante terminó el pedido; ya puede tomarlo un domiciliario. */
-    LISTO_PARA_ENTREGAR("Listo para entregar"),
+    LISTO_PARA_ENTREGAR("Listo para entregar", "asignado"),
     /** El domiciliario lleva el pedido al cliente. */
-    EN_CAMINO("En camino"),
+    EN_CAMINO("En camino", "en camino"),
     /** Estado final: el pedido fue entregado al cliente. */
-    ENTREGADO("Entregado"),
+    ENTREGADO("Entregado", "entregado"),
     /** Estado final: el pedido fue cancelado. */
-    CANCELADO("Cancelado");
+    CANCELADO("Cancelado", "cancelado");
+
+    /** Valor por defecto cuando la base trae un estado desconocido. */
+    static final OrderStatus POR_DEFECTO = RECIBIDO;
 
     private final String descripcion;
+    private final String valorBaseDatos;
 
-    OrderStatus(String descripcion) {
+    OrderStatus(String descripcion, String valorBaseDatos) {
         this.descripcion = descripcion;
+        this.valorBaseDatos = valorBaseDatos;
     }
 
     /** @return Texto legible del estado, apto para mostrar en pantalla. */
     public String getDescripcion() {
         return descripcion;
+    }
+
+    /**
+     * @return texto exacto que se guarda en {@code pedido.estado} (minúsculas, con espacios como
+     *         en el check constraint).
+     */
+    public String aBaseDatos() {
+        return valorBaseDatos;
     }
 
     /** @return {@code true} si el estado es terminal (entregado o cancelado). */
@@ -73,34 +91,53 @@ public enum OrderStatus {
     }
 
     /**
-     * Convierte un texto en un estado. Acepta el nombre de la constante
-     * ({@code EN_CAMINO}) o la descripción ({@code "En camino"}), sin distinguir
-     * mayúsculas ni tildes, y también los nombres de la versión anterior
-     * ({@code "Creado"}, {@code "Confirmado"}, {@code "Listo"}, {@code "LISTO_PARA_RECOGER"}).
+     * Convierte un texto en un estado. Acepta el nombre de la constante, la descripción, los
+     * valores de la base ({@code en camino}, {@code asignado}...) y los nombres de versiones
+     * anteriores. No distingue mayúsculas, tildes, espacios ni guiones. Nunca lanza excepción:
+     * un texto desconocido se registra en consola y devuelve {@link #POR_DEFECTO}.
      *
-     * @param texto Texto a convertir.
+     * @param texto Texto a convertir (puede ser {@code null}).
      * @return El estado correspondiente.
-     * @throws IllegalArgumentException Si el texto es vacío o no corresponde a ningún estado.
      */
     public static OrderStatus desdeTexto(String texto) {
-        String clave = Validaciones.claveEnum(Validaciones.texto(texto, "El estado del pedido"));
-        switch (clave) {
-            case "CREADO":
+        OrderStatus encontrado = buscar(texto);
+        return encontrado == null ? EnumTolerante.desconocido("OrderStatus", texto, POR_DEFECTO) : encontrado;
+    }
+
+    /**
+     * Convierte un texto escrito por el usuario (API o formulario). A diferencia de
+     * {@link #desdeTexto}, rechaza los valores desconocidos para no cambiar un pedido por error.
+     *
+     * @throws IllegalArgumentException si el texto no corresponde a ningún estado
+     */
+    public static OrderStatus desdeEntrada(String texto) {
+        OrderStatus encontrado = buscar(texto);
+        if (encontrado == null) {
+            throw new IllegalArgumentException("Estado de pedido inválido: '" + texto + "'.");
+        }
+        return encontrado;
+    }
+
+    /** @return el estado que corresponde al texto, o {@code null} si no se reconoce. */
+    private static OrderStatus buscar(String texto) {
+        switch (EnumTolerante.clave(texto)) {
+            case "recibido": case "creado": case "pendiente":
                 return RECIBIDO;
-            case "CONFIRMADO":
+            case "aceptado": case "confirmado":
                 return ACEPTADO;
-            case "LISTO":
-            case "LISTO_PARA_RECOGER": // nombre anterior del estado LISTO_PARA_ENTREGAR
+            case "en_preparacion": case "preparando":
+                return EN_PREPARACION;
+            case "listo_para_entregar": case "listo": case "listo_para_recoger": case "asignado":
                 return LISTO_PARA_ENTREGAR;
+            case "en_camino":
+                return EN_CAMINO;
+            case "entregado":
+                return ENTREGADO;
+            case "cancelado":
+                return CANCELADO;
             default:
-                break;
+                return null;
         }
-        for (OrderStatus estado : values()) {
-            if (estado.name().equals(clave) || Validaciones.claveEnum(estado.descripcion).equals(clave)) {
-                return estado;
-            }
-        }
-        throw new IllegalArgumentException("Estado de pedido inválido: '" + texto + "'.");
     }
 
     @Override

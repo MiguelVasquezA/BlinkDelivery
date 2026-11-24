@@ -78,7 +78,7 @@ public class CustomerFileDao {
             Map<Integer, List<Address>> direcciones = AddresFileDao.listarTodasAgrupadas(c);
             while (rs.next()) {
                 int id = rs.getInt("id_persona");
-                clientes.add(mapear(rs, direcciones.getOrDefault(id, List.of())));
+                try { clientes.add(mapear(rs, direcciones.getOrDefault(id, List.of()))); } catch (SQLException | RuntimeException e) { Db.omitirFila(e); }
             }
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer los clientes de la base de datos.", e);

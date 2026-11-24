@@ -83,7 +83,7 @@ public class RestaurantFileDao {
              PreparedStatement ps = c.prepareStatement(SELECCION + " ORDER BY r.id_restaurante");
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                restaurants.add(mapear(rs));
+                try { restaurants.add(mapear(rs)); } catch (SQLException | RuntimeException e) { Db.omitirFila(e); }
             }
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer los restaurantes de la base de datos.", e);

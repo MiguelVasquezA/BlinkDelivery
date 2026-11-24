@@ -87,7 +87,7 @@ public class OrderFileDao {
                     ps.setNull(4, Types.INTEGER);
                 }
                 ps.setInt(5, idDireccion(c, idCliente, order.getDireccionEntrega()));
-                ps.setString(6, order.getEstado().name());
+                ps.setString(6, order.getEstado().aBaseDatos());
                 ps.setObject(7, aFechaBase(order.getFechaHora()));
                 ps.setBigDecimal(8, BigDecimal.valueOf(order.getTotal()));
                 ps.executeUpdate();
@@ -119,7 +119,7 @@ public class OrderFileDao {
         try (Connection c = Db.conectar();
              PreparedStatement ps = c.prepareStatement(
                      "UPDATE pedido SET estado = ?, id_domiciliario = ?, total = ? WHERE id_pedido = ?")) {
-            ps.setString(1, order.getEstado().name());
+            ps.setString(1, order.getEstado().aBaseDatos());
             if (order.tieneDomiciliario()) {
                 ps.setInt(2, Ids.entero(order.getDomiciliario().getIdentification()));
             } else {
@@ -211,10 +211,15 @@ public class OrderFileDao {
 
         List<Order> pedidos = new ArrayList<>();
         for (Fila f : filas) {
-            Order o = construir(f, lineasPorPedido.getOrDefault(f.idPedido(), List.of()),
-                    clientes, restaurantes, productos, domiciliarios);
-            if (o != null) {
-                pedidos.add(o);
+            try {
+                Order o = construir(f, lineasPorPedido.getOrDefault(f.idPedido(), List.of()),
+                        clientes, restaurantes, productos, domiciliarios);
+                if (o != null) {
+                    pedidos.add(o);
+                }
+            } catch (RuntimeException e) {
+                // Fila corrupta: se registra y se omite para no tumbar el listado completo.
+                Db.omitirFila(e);
             }
         }
         return pedidos;
