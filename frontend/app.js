@@ -761,29 +761,47 @@ async function confirmarPedido() {
   }
 }
 
-/** Pedidos entregados del cliente que todavía no tienen calificación (RN12). */
-function pedidosCalificables(pedidos, calificaciones) {
+/**
+ * Calificaciones que aún faltan en un pedido entregado (RN12): "RESTAURANTE" y/o "DOMICILIARIO".
+ * Cada una se valida por separado; el domiciliario solo aplica si el pedido lo tiene asignado.
+ */
+function calificacionesPendientes(pedido, calificaciones) {
   const yo = estado.perfil.identificacion;
-  const calificados = new Set(calificaciones.filter((r) => r.clienteId === yo).map((r) => r.pedidoId));
-  return pedidos.filter((o) => o.clienteId === yo && o.estado === "ENTREGADO" && !calificados.has(o.id));
+  if (pedido.clienteId !== yo || pedido.estado !== "ENTREGADO") return [];
+  const delPedido = calificaciones.filter((r) => r.clienteId === yo && r.pedidoId === pedido.id);
+  const pendientes = [];
+  if (!delPedido.some((r) => !r.domiciliarioId)) pendientes.push("RESTAURANTE");
+  if (pedido.domiciliarioId && !delPedido.some((r) => r.domiciliarioId === pedido.domiciliarioId)) {
+    pendientes.push("DOMICILIARIO");
+  }
+  return pendientes;
+}
+
+/** Pedidos entregados del cliente con al menos una calificación pendiente (RN12). */
+function pedidosCalificables(pedidos, calificaciones) {
+  return pedidos.filter((o) => calificacionesPendientes(o, calificaciones).length > 0);
 }
 
 async function vistaPedidosCliente() {
   const [pedidos, calificaciones] = await Promise.all([api("GET", "/orders"), api("GET", "/ratings"), obtenerRestaurantes()]);
   const yo = estado.perfil.identificacion;
   const mios = pedidos.filter((o) => o.clienteId === yo).sort(porFechaDesc);
-  const calificacionPorPedido = new Map(calificaciones.filter((r) => r.clienteId === yo).map((r) => [r.pedidoId, r]));
+  const calificacionesDelCliente = calificaciones.filter((r) => r.clienteId === yo);
   cache.set("elegibles", pedidosCalificables(pedidos, calificaciones));
 
   return cabecera("Mis pedidos", "Seguimiento de tus pedidos.") +
     (mios.length
       ? rejilla(mios.map((o) => {
-          const calificacion = calificacionPorPedido.get(o.id);
-          const pie = calificacion
-            ? `<span>Tu calificación: ${estrellas(calificacion.estrellas)}</span>`
-            : o.estado === "ENTREGADO"
+          const delPedido = calificacionesDelCliente.filter((r) => r.pedidoId === o.id);
+          const deRestaurante = delPedido.find((r) => !r.domiciliarioId);
+          const deDomiciliario = delPedido.find((r) => r.domiciliarioId);
+          const pie = [
+            deRestaurante ? `<span>Restaurante: ${estrellas(deRestaurante.estrellas)}</span>` : "",
+            deDomiciliario ? `<span>Domiciliario: ${estrellas(deDomiciliario.estrellas)}</span>` : "",
+            calificacionesPendientes(o, calificaciones).length
               ? `<button type="button" class="boton-secundario" data-accion="calificar" data-id="${esc(o.id)}">Calificar</button>`
-              : "";
+              : "",
+          ].filter(Boolean).join(" ");
           return `
           <article class="tarjeta">
             <div class="pie"><h3>Pedido ${esc(o.id)}</h3>${insigniaEstado(o.estado)}</div>
@@ -812,7 +830,7 @@ async function vistaCalificacionesCliente() {
     (mias.length
       ? rejilla(mias.map((r) => `
           <article class="tarjeta">
-            <div class="pie"><h3>${esc(nombreRestaurante(r.restauranteId))}</h3>${estrellas(r.estrellas)}</div>
+            <div class="pie"><h3>${r.domiciliarioId ? "Domiciliario" : esc(nombreRestaurante(r.restauranteId))}</h3>${estrellas(r.estrellas)}</div>
             <p>${esc(r.comentario || "Sin comentario")}</p>
             <div class="pie"><span>Pedido ${esc(r.pedidoId)}</span><span>${fecha(r.fecha)}</span></div>
           </article>`))
@@ -822,6 +840,10 @@ async function vistaCalificacionesCliente() {
 function accionCalificar(pedidoPreseleccionado) {
   const elegibles = cache.get("elegibles") || [];
   if (!elegibles.length) throw new Error("No tienes pedidos entregados por calificar.");
+  const opcionesPuntuacion = [
+    { valor: "", etiqueta: "No calificar" },
+    ...[5, 4, 3, 2, 1].map((n) => ({ valor: String(n), etiqueta: `${"★".repeat(n)}${"☆".repeat(5 - n)} (${n})` })),
+  ];
   abrirModal({
     titulo: "Calificar pedido",
     textoEnviar: "Enviar calificación",
@@ -832,21 +854,35 @@ function accionCalificar(pedidoPreseleccionado) {
         nombre: "pedidoId", etiqueta: "Pedido", tipo: "select", obligatorio: true, completa: true,
         opciones: elegibles.map((o) => ({ valor: o.id, etiqueta: `${o.id} · ${nombreRestaurante(o.restauranteId)}` })),
       },
-      {
-        nombre: "estrellas", etiqueta: "Puntuación", tipo: "select", obligatorio: true,
-        opciones: [5, 4, 3, 2, 1].map((n) => ({ valor: String(n), etiqueta: `${"★".repeat(n)}${"☆".repeat(5 - n)} (${n})` })),
-      },
-      { nombre: "comentario", etiqueta: "Comentario (opcional, máximo 200 caracteres)", tipo: "textarea", completa: true },
+      { nombre: "estrellasRestaurante", etiqueta: "Puntuación al restaurante", tipo: "select", opciones: opcionesPuntuacion },
+      { nombre: "comentarioRestaurante", etiqueta: "Comentario al restaurante (opcional, máximo 200 caracteres)", tipo: "textarea", completa: true },
+      { nombre: "estrellasDomiciliario", etiqueta: "Puntuación al domiciliario", tipo: "select", opciones: opcionesPuntuacion },
+      { nombre: "comentarioDomiciliario", etiqueta: "Comentario al domiciliario (opcional, máximo 200 caracteres)", tipo: "textarea", completa: true },
     ],
     enviar: async (d) => {
       const pedido = elegibles.find((o) => o.id === d.pedidoId);
       if (!pedido) throw new Error("Ese pedido ya no está disponible para calificar.");
-      await api("POST", "/ratings", {
-        pedidoId: pedido.id,
-        clienteId: estado.perfil.identificacion,
-        estrellas: Number(d.estrellas),
-        comentario: d.comentario,
-      });
+      const pendientes = calificacionesPendientes(pedido, await api("GET", "/ratings"));
+      const envios = [];
+      if (d.estrellasRestaurante && pendientes.includes("RESTAURANTE")) {
+        envios.push({ tipo: "RESTAURANTE", estrellas: d.estrellasRestaurante, comentario: d.comentarioRestaurante });
+      }
+      if (d.estrellasDomiciliario && pendientes.includes("DOMICILIARIO")) {
+        envios.push({ tipo: "DOMICILIARIO", estrellas: d.estrellasDomiciliario, comentario: d.comentarioDomiciliario });
+      }
+      if (!envios.length) {
+        throw new Error("Elige una puntuación para una calificación pendiente de este pedido.");
+      }
+      // Cada calificación se registra y valida por separado (restaurante y domiciliario).
+      for (const e of envios) {
+        await api("POST", "/ratings", {
+          pedidoId: pedido.id,
+          clienteId: estado.perfil.identificacion,
+          tipo: e.tipo,
+          estrellas: Number(e.estrellas),
+          comentario: e.comentario,
+        });
+      }
       cache.delete("elegibles");
     },
   });
@@ -1168,26 +1204,25 @@ async function vistaEntregas() {
 }
 
 async function vistaCalificacionesDomiciliario() {
-  const [driver, calificaciones] = await Promise.all([
-    api("GET", `/drivers/${enc(estado.perfil.identificacion)}`),
-    api("GET", "/ratings"),
-  ]);
+  // El servidor calcula promedio (1 decimal), total y comentarios a partir de las calificaciones del domiciliario.
+  const driver = await api("GET", `/drivers/${enc(estado.perfil.identificacion)}`);
   estado.perfil = driver;
-  const recientes = calificaciones.sort(porFechaDesc).slice(0, 6);
+  const recibidas = driver.comentarios || [];
   return cabecera("Mis calificaciones", "Tu desempeño como domiciliario.") +
     `<div class="metricas">
        <div class="tarjeta-metrica"><div class="etiqueta">Calificación promedio</div>
-         <div class="valor">${Number(driver.calificacionPromedio || 0).toFixed(2)} ★</div></div>
+         <div class="valor">${Number(driver.promedioCalificacion || 0).toFixed(1)} ★</div></div>
+       <div class="tarjeta-metrica"><div class="etiqueta">Reseñas</div>
+         <div class="valor">${Number(driver.totalCalificaciones || 0)}</div></div>
      </div>` +
-    `<p class="ayuda">Las calificaciones de la plataforma todavía no están vinculadas a domiciliarios; aquí se muestran las más recientes.</p>` +
-    (recientes.length
-      ? rejilla(recientes.map((r) => `
+    (recibidas.length
+      ? rejilla(recibidas.map((r) => `
           <article class="tarjeta">
-            <div class="pie"><h3>${esc(nombreRestaurante(r.restauranteId))}</h3>${estrellas(r.estrellas)}</div>
+            <div class="pie"><h3>Pedido ${esc(r.pedidoId)}</h3>${estrellas(r.estrellas)}</div>
             <p>${esc(r.comentario || "Sin comentario")}</p>
-            <div class="pie"><span>Pedido ${esc(r.pedidoId)}</span><span>${fecha(r.fecha)}</span></div>
+            <div class="pie"><span>${fecha(r.fecha)}</span></div>
           </article>`))
-      : vacio("⭐", "Aún no hay calificaciones", "Cuando los clientes califiquen pedidos aparecerán aquí."));
+      : vacio("⭐", "Aún no tienes calificaciones", "Cuando los clientes califiquen tus entregas aparecerán aquí."));
 }
 
 async function vistaPerfilDomiciliario() {
@@ -1201,7 +1236,8 @@ async function vistaPerfilDomiciliario() {
        <p>Identificación: ${esc(d.identificacion)}</p>
        <p>Teléfono: ${esc(d.telefono)}</p>
        <p>Vehículo: ${esc(d.tipoVehiculo)}</p>
-       <div class="pie">${insignia(etiquetaEstado, d.estado === "DISPONIBLE" ? "ok" : "aviso")} ${estrellas(d.calificacionPromedio)}</div>
+       <div class="pie">${insignia(etiquetaEstado, d.estado === "DISPONIBLE" ? "ok" : "aviso")} ${estrellas(d.promedioCalificacion)}
+         <span>${Number(d.promedioCalificacion || 0).toFixed(1)} · ${Number(d.totalCalificaciones || 0)} reseñas</span></div>
      </article>`;
 }
 
@@ -1240,8 +1276,9 @@ async function vistaGeneral() {
   const productosActivos = productos.filter((p) => p.disponible).length;
   const entregados = pedidos.filter((o) => o.estado === "ENTREGADO");
   const ventas = entregados.reduce((suma, o) => suma + Number(o.total || 0), 0);
-  const promedio = calificaciones.length
-    ? calificaciones.reduce((suma, r) => suma + Number(r.estrellas || 0), 0) / calificaciones.length
+  const deRestaurante = calificaciones.filter((r) => !r.domiciliarioId);
+  const promedio = deRestaurante.length
+    ? deRestaurante.reduce((suma, r) => suma + Number(r.estrellas || 0), 0) / deRestaurante.length
     : null;
 
   const metricas = [
@@ -1251,7 +1288,7 @@ async function vistaGeneral() {
     ["Pedidos", pedidos.length, `${entregados.length} entregados`],
     ["Productos", productos.length, `${productosActivos} activos`],
     ["Ventas entregadas", moneda(ventas), "suma de pedidos entregados"],
-    ["Calificación promedio", promedio === null ? "—" : `${promedio.toFixed(1)} ★`, `${calificaciones.length} calificaciones`],
+    ["Calificación promedio", promedio === null ? "—" : `${promedio.toFixed(1)} ★`, `${deRestaurante.length} calificaciones`],
   ];
 
   const recientes = [...pedidos].sort(porFechaDesc).slice(0, 10);

@@ -32,6 +32,8 @@ public class Rating implements Serializable {
     private final int estrellas;
     private final String comentario;
     private final LocalDateTime fecha;
+    /** Domiciliario calificado, o {@code null} si la calificación es para el restaurante. */
+    private final String domiciliarioId;
 
     /**
      * Crea una calificación con la fecha y hora actuales.
@@ -63,6 +65,18 @@ public class Rating implements Serializable {
      */
     public Rating(String id, String orderId, String customerId, String restaurantId,
                   int estrellas, String comentario, LocalDateTime fecha) {
+        this(id, orderId, customerId, restaurantId, estrellas, comentario, fecha, null);
+    }
+
+    /**
+     * Crea una calificación de un pedido: para el restaurante ({@code domiciliarioId} nulo)
+     * o para el domiciliario que lo entregó.
+     *
+     * @param domiciliarioId Id del domiciliario calificado, o {@code null} si califica al restaurante.
+     * @throws IllegalArgumentException Si algún dato obligatorio es nulo, vacío o las estrellas están fuera de rango.
+     */
+    public Rating(String id, String orderId, String customerId, String restaurantId,
+                  int estrellas, String comentario, LocalDateTime fecha, String domiciliarioId) {
         if (estrellas < MIN_ESTRELLAS || estrellas > MAX_ESTRELLAS) {
             throw new IllegalArgumentException("La calificación debe estar entre " + MIN_ESTRELLAS
                     + " y " + MAX_ESTRELLAS + " estrellas.");
@@ -74,6 +88,17 @@ public class Rating implements Serializable {
         this.estrellas = estrellas;
         this.comentario = Validaciones.opcional(comentario);
         this.fecha = Validaciones.noNulo(fecha, "La fecha de la calificación");
+        this.domiciliarioId = domiciliarioId == null || domiciliarioId.isBlank() ? null : domiciliarioId.trim();
+    }
+
+    /** @return Id del domiciliario calificado, o {@code null} si la calificación es para el restaurante. */
+    public String getDomiciliarioId() {
+        return domiciliarioId;
+    }
+
+    /** @return {@code true} si la calificación es para el domiciliario y no para el restaurante. */
+    public boolean esDeDomiciliario() {
+        return domiciliarioId != null;
     }
 
     /** @return Identificador de la calificación. */
