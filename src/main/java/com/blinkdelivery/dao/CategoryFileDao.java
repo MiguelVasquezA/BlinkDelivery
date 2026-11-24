@@ -2,131 +2,167 @@ package com.blinkdelivery.dao;
 
 import com.blinkdelivery.modelo.Category;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persistencia en archivo plano de las categorías y de su relación muchos a muchos
- * con los restaurantes (RN03, RN04).
+ * DAO de categorías y de su vínculo con restaurantes, sobre PostgreSQL
+ * (tablas {@code categoria} y {@code restaurante_categoria}).
  * <p>
- * {@code categories.txt}: {@code id;nombre;descripcion}<br>
- * {@code restaurant_categories.txt}: {@code idRestaurante;idCategoria}
+ * La tabla {@code categoria} no tiene descripción: al leer se usa un texto por defecto.
  * </p>
  *
- * @author BlinkDelivery
- * @version 1.0
+ * @author Miguel Vasquez
+ * @version 2.0
  */
 public class CategoryFileDao {
-    private static final String RUTA = "data/categories.txt";
-    private static final String RUTA_RELACION = "data/restaurant_categories.txt";
+    /** Descripción que se muestra cuando la base de datos no guarda una. */
+    static final String SIN_DESCRIPCION = "Sin descripción";
 
     /**
-     * Guarda una categoría nueva.
+     * Registra una categoría nueva con el id que ya trae el objeto.
      *
      * @param categoria Categoría a guardar.
-     * @throws IOException Si falla la escritura en disco.
+     * @throws IOException Si falla la base de datos.
      */
     public void guardar(Category categoria) throws IOException {
-        List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(categoria.getId() + ";" + categoria.getNombre() + ";" + categoria.getDescripcion());
-        ArchivoUtil.guardarArchivo(RUTA, lineas);
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO categoria (id_categoria, nombre) VALUES (?, ?)")) {
+            ps.setInt(1, aEntero(categoria.getId()));
+            ps.setString(2, categoria.getNombre());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IOException("No se pudo guardar la categoría en la base de datos.", e);
+        }
     }
 
     /**
-     * @return Todas las categorías registradas.
-     * @throws IOException Si falla la lectura del archivo.
+     * @return Todas las categorías, ordenadas por id.
+     * @throws IOException Si falla la base de datos.
      */
     public List<Category> listar() throws IOException {
-        List<Category> categorias = new ArrayList<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == 3) {
-                categorias.add(new Category(p[0], p[1], p[2]));
-            }
-        }
-        return categorias;
+        return consultar("SELECT id_categoria, nombre FROM categoria ORDER BY id_categoria", null);
     }
 
     /**
      * @param id Identificador de la categoría.
-     * @return La categoría, o {@code null} si no existe.
-     * @throws IOException Si falla la lectura del archivo.
+     * @return La categoría, o {@code null} si no existe o el id no es numérico.
+     * @throws IOException Si falla la base de datos.
      */
     public Category buscarPorId(String id) throws IOException {
-        for (Category c : listar()) {
-            if (c.getId().equalsIgnoreCase(id)) {
-                return c;
-            }
+        if (!esEntero(id)) {
+            return null;
         }
-        return null;
+        List<Category> r = consultar("SELECT id_categoria, nombre FROM categoria WHERE id_categoria = ?",
+                ps -> ps.setInt(1, Integer.parseInt(id.trim())));
+        return r.isEmpty() ? null : r.get(0);
     }
 
     /**
      * @param nombre Nombre de la categoría (sin distinguir mayúsculas).
      * @return La categoría, o {@code null} si no existe.
-     * @throws IOException Si falla la lectura del archivo.
+     * @throws IOException Si falla la base de datos.
      */
     public Category buscarPorNombre(String nombre) throws IOException {
-        for (Category c : listar()) {
-            if (c.getNombre().equalsIgnoreCase(nombre.trim())) {
-                return c;
-            }
-        }
-        return null;
+        List<Category> r = consultar("SELECT id_categoria, nombre FROM categoria WHERE lower(nombre) = lower(?)",
+                ps -> ps.setString(1, nombre.trim()));
+        return r.isEmpty() ? null : r.get(0);
     }
 
     /**
-     * Asocia una categoría a un restaurante, si no estaba asociada.
+     * Vincula una categoría a un restaurante (no duplica el vínculo).
      *
-     * @param idRestaurante Restaurante.
-     * @param idCategoria   Categoría.
-     * @throws IOException Si falla la lectura o escritura del archivo.
+     * @param idRestaurante id del restaurante
+     * @param idCategoria   id de la categoría
+     * @throws IOException Si falla la base de datos.
      */
     public void vincular(String idRestaurante, String idCategoria) throws IOException {
-        List<String> lineas = ArchivoUtil.leerArchivo(RUTA_RELACION);
-        String registro = idRestaurante + ";" + idCategoria;
-        for (String linea : lineas) {
-            if (linea.equalsIgnoreCase(registro)) {
-                return;
-            }
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO restaurante_categoria (id_restaurante, id_categoria) VALUES (?, ?) "
+                             + "ON CONFLICT DO NOTHING")) {
+            ps.setInt(1, aEntero(idRestaurante));
+            ps.setInt(2, aEntero(idCategoria));
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new IOException("No se pudo vincular la categoría en la base de datos.", e);
         }
-        lineas.add(registro);
-        ArchivoUtil.guardarArchivo(RUTA_RELACION, lineas);
     }
 
     /**
-     * Quita la asociación entre una categoría y un restaurante.
+     * Quita el vínculo entre un restaurante y una categoría.
      *
-     * @param idRestaurante Restaurante.
-     * @param idCategoria   Categoría.
-     * @return {@code true} si existía la asociación.
-     * @throws IOException Si falla la lectura o escritura del archivo.
+     * @return {@code true} si existía el vínculo y se quitó
+     * @throws IOException Si falla la base de datos.
      */
     public boolean desvincular(String idRestaurante, String idCategoria) throws IOException {
-        List<String> lineas = ArchivoUtil.leerArchivo(RUTA_RELACION);
-        boolean quitada = lineas.removeIf(l -> l.equalsIgnoreCase(idRestaurante + ";" + idCategoria));
-        ArchivoUtil.guardarArchivo(RUTA_RELACION, lineas);
-        return quitada;
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM restaurante_categoria WHERE id_restaurante = ? AND id_categoria = ?")) {
+            ps.setInt(1, aEntero(idRestaurante));
+            ps.setInt(2, aEntero(idCategoria));
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new IOException("No se pudo desvincular la categoría en la base de datos.", e);
+        }
     }
 
     /**
-     * Lista las categorías asociadas a un restaurante.
-     *
-     * @param idRestaurante Restaurante a consultar.
-     * @return Categorías del restaurante (vacía si no tiene).
-     * @throws IOException Si falla la lectura de los archivos.
+     * @param idRestaurante restaurante a consultar
+     * @return categorías vinculadas al restaurante (vacía si no tiene)
+     * @throws IOException Si falla la base de datos.
      */
     public List<Category> listarPorRestaurante(String idRestaurante) throws IOException {
+        if (!esEntero(idRestaurante)) {
+            return new ArrayList<>();
+        }
+        return consultar(
+                "SELECT c.id_categoria, c.nombre FROM restaurante_categoria rc "
+                        + "JOIN categoria c ON c.id_categoria = rc.id_categoria "
+                        + "WHERE rc.id_restaurante = ? ORDER BY c.id_categoria",
+                ps -> ps.setInt(1, Integer.parseInt(idRestaurante.trim())));
+    }
+
+    // ------------------------------------------------------------ auxiliares
+
+    /** Parámetros opcionales de una consulta. */
+    @FunctionalInterface
+    private interface Parametros {
+        void asignar(PreparedStatement ps) throws SQLException;
+    }
+
+    private List<Category> consultar(String sql, Parametros parametros) throws IOException {
         List<Category> resultado = new ArrayList<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA_RELACION)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == 2 && p[0].equalsIgnoreCase(idRestaurante)) {
-                Category c = buscarPorId(p[1]);
-                if (c != null && !resultado.contains(c)) {
-                    resultado.add(c);
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            if (parametros != null) {
+                parametros.asignar(ps);
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    resultado.add(new Category(String.valueOf(rs.getInt("id_categoria")),
+                            rs.getString("nombre"), SIN_DESCRIPCION));
                 }
             }
+        } catch (SQLException e) {
+            throw new IOException("No se pudieron leer las categorías de la base de datos.", e);
         }
         return resultado;
+    }
+
+    private static boolean esEntero(String valor) {
+        return valor != null && valor.trim().matches("\\d{1,9}");
+    }
+
+    private static int aEntero(String valor) {
+        if (!esEntero(valor)) {
+            throw new IllegalArgumentException("El id debe ser numérico: '" + valor + "'.");
+        }
+        return Integer.parseInt(valor.trim());
     }
 }

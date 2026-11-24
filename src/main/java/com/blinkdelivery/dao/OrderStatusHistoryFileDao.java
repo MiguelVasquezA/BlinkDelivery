@@ -3,48 +3,49 @@ package com.blinkdelivery.dao;
 import com.blinkdelivery.modelo.OrderStatus;
 import com.blinkdelivery.modelo.OrderStatusChange;
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persistencia en archivo plano del historial de estados de los pedidos (RN18).
+ * Historial de estados de un pedido.
  * <p>
- * Formato de cada línea: {@code idPedido;ESTADO;fechaHora}.
+ * Nombre heredado: antes persistía en {@code data/order_status_history.txt}. El esquema no tiene
+ * tabla de historial, así que el historial se deriva del estado actual y la fecha del pedido
+ * ({@code pedido.estado} y {@code pedido.fecha_pedido}). Por eso {@link #guardar} no escribe nada:
+ * no se conservan los cambios intermedios.
  * </p>
- *
- * @author BlinkDelivery
- * @version 1.0
  */
 public class OrderStatusHistoryFileDao {
-    private static final String RUTA = "data/order_status_history.txt";
 
-    /**
-     * Agrega un cambio de estado al final del historial.
-     *
-     * @param cambio Cambio de estado a registrar.
-     * @throws IOException Si falla la escritura en disco.
-     */
+    /** No hace nada: el historial se deriva del estado del pedido en la base de datos. */
     public void guardar(OrderStatusChange cambio) throws IOException {
-        List<String> lineas = ArchivoUtil.leerArchivo(RUTA);
-        lineas.add(cambio.toRegistro());
-        ArchivoUtil.guardarArchivo(RUTA, lineas);
+        // Intencionalmente vacío (ver la descripción de la clase).
     }
 
     /**
-     * Lista los cambios de estado de un pedido en orden cronológico de registro.
-     *
-     * @param idPedido Identificador del pedido.
-     * @return Historial del pedido (vacío si no tiene registros).
-     * @throws IOException Si falla la lectura del archivo.
+     * @param idPedido id del pedido ("PED-0003")
+     * @return una sola entrada con el estado actual del pedido, o vacía si no existe
+     * @throws IOException si falla la base de datos
      */
     public List<OrderStatusChange> listarPorPedido(String idPedido) throws IOException {
         List<OrderStatusChange> historial = new ArrayList<>();
-        for (String linea : ArchivoUtil.leerArchivo(RUTA)) {
-            String[] p = linea.split(";", -1);
-            if (p.length == 3 && p[0].equalsIgnoreCase(idPedido)) {
-                historial.add(new OrderStatusChange(p[0], OrderStatus.desdeTexto(p[1]), LocalDateTime.parse(p[2])));
+        try (Connection c = Db.conectar();
+             PreparedStatement ps = c.prepareStatement("SELECT estado, fecha_pedido FROM pedido WHERE id_pedido = ?")) {
+            ps.setInt(1, Ids.pedido(idPedido));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    OffsetDateTime fecha = rs.getObject("fecha_pedido", OffsetDateTime.class);
+                    historial.add(new OrderStatusChange(idPedido,
+                            OrderStatus.desdeTexto(rs.getString("estado")), OrderFileDao.aFechaLocal(fecha)));
+                }
             }
+        } catch (SQLException e) {
+            throw new IOException("No se pudo consultar el historial del pedido.", e);
         }
         return historial;
     }
