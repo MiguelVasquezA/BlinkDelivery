@@ -44,10 +44,10 @@ Se eligió el respaldo lógico porque la base es pequeña, es portable entre equ
 
 ## 6. Dónde se guardan
 
-Se sigue la regla de tener al menos dos copias en lugares distintos:
+Se busca tener al menos dos copias en lugares distintos:
 
-1. **Copia local:** carpeta `respaldos/` en el equipo del responsable, fuera de la carpeta del repositorio.
-2. **Copia externa:** almacenamiento en la nube privado o memoria USB, con acceso solo para el equipo.
+1. **Copia local:** carpeta de respaldos en el equipo del responsable, ubicada dentro de su carpeta de Documentos y fuera de la carpeta del repositorio. Esta carpeta se sincroniza con OneDrive, por lo que también queda una copia en la nube de la cuenta personal.
+2. **Copia externa:** [memoria USB / equipo de otro integrante / One drive].
 
 Los respaldos **no se suben a GitHub** (ver sección 8).
 
@@ -104,3 +104,54 @@ C:\Program Files\PostgreSQL\18\pgAdmin 4\runtime\pg_dump.exe --file "C:\\Users\\
 **Evidencia 2:** respaldo terminado con éxito.
 
 ![Respaldo exitoso](evidencias/02_backup_proceso_exitoso.png)
+
+## 10. Estado de la base original antes de restaurar
+
+Antes de restaurar, se registró el estado de la base `blinkdelivery` para poder compararlo con la base restaurada. Las consultas se ejecutaron sin hacer cambios entre el respaldo y la medición.
+
+Consulta de conteos:
+
+```sql
+SELECT 'persona' AS tabla, COUNT(*) FROM persona
+UNION ALL SELECT 'cliente', COUNT(*) FROM cliente
+UNION ALL SELECT 'domiciliario', COUNT(*) FROM domiciliario
+UNION ALL SELECT 'direccion', COUNT(*) FROM direccion
+UNION ALL SELECT 'restaurante', COUNT(*) FROM restaurante
+UNION ALL SELECT 'categoria', COUNT(*) FROM categoria
+UNION ALL SELECT 'restaurante_categoria', COUNT(*) FROM restaurante_categoria
+UNION ALL SELECT 'producto', COUNT(*) FROM producto
+UNION ALL SELECT 'pedido', COUNT(*) FROM pedido
+UNION ALL SELECT 'detalle_pedido', COUNT(*) FROM detalle_pedido
+UNION ALL SELECT 'calificacion', COUNT(*) FROM calificacion;
+```
+
+Consulta de negocio (C07 del banco de consultas, total vendido en pedidos entregados):
+
+```sql
+SELECT SUM(total) FROM pedido WHERE estado = 'entregado';
+```
+
+Resultados en la base original:
+
+| Tabla | Filas en `blinkdelivery` | Filas en `blinkdelivery_restore` | ¿Coincide? |
+|---|---|---|---|
+| persona | [18] | | |
+| cliente | [14] | | |
+| domiciliario | [6] | | |
+| direccion | [17] | | |
+| restaurante | [6] | | |
+| categoria | [8] | | |
+| restaurante_categoria | [9] | | |
+| producto | [29] | | |
+| pedido | [24] | | |
+| detalle_pedido | [51] | | |
+| calificacion | [14] | | |
+| Resultado de C07 | [911500.00] | | |
+
+**Evidencia 3:** conteos de las tablas en la base original.
+
+![Conteos en la base original](evidencias/03_conteos_original.png)
+
+**Evidencia 4:** resultado de C07 en la base original.
+
+![C07 en la base original](evidencias/04_c07_original.png)
