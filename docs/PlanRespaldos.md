@@ -155,3 +155,43 @@ Resultados en la base original:
 **Evidencia 4:** resultado de C07 en la base original.
 
 ![C07 en la base original](evidencias/04_c07_original.png)
+
+## 11. Restauración del respaldo
+
+Se restauró el respaldo en una base nueva y vacía, sin tocar la base original, para comprobar que el archivo sirve.
+
+| Dato | Valor |
+|---|---|
+| Fecha y hora | [24/11/2026, 12:44:05 a. m.] |
+| Responsable | Ednilson Contreras |
+| Archivo usado | `blinkdelivery_2026-11-23.backup` |
+| Base destino | `blinkdelivery_restore` (creada vacía) |
+| Formato | Custom or tar |
+| Duración | 0,86 segundos |
+| Resultado | Exitoso, sin errores en el registro |
+
+La duración queda muy por debajo de la meta de recuperación (RTO) de 30 minutos. Es un tiempo corto porque la base es pequeña.
+
+### Procedimiento
+
+1. Clic derecho en **Databases → Create → Database...** y se creó `blinkdelivery_restore`.
+2. Clic derecho sobre `blinkdelivery_restore` y se eligió **Restore...**
+3. En **Format** se eligió **Custom or tar** y en **Filename** el archivo `.backup`.
+4. Se presionó **Restore** y se verificó en More details que terminó con "Successfully completed".
+5. Se actualizó el árbol (**Refresh**) y se comprobó que en **Schemas → public → Tables** aparecen las 11 tablas.
+
+### Comando ejecutado por pgAdmin
+
+```text
+[pega aquí la línea "Running the command: ... pg_restore ..."]
+```
+
+### Evidencias
+
+**Evidencia 5:** configuración de la restauración.
+
+![Configuración de la restauración](evidencias/05_restore_configuracion.png)
+
+**Evidencia 6:** restauración terminada con éxito.
+
+![Restauración exitosa](evidencias/06_restore_exitoso.png)
