@@ -87,7 +87,7 @@ public class CredencialFileDao {
                 return partes.length == 2 ? partes : null;
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar la contraseña del cliente.", e);
+            throw Db.error("No se pudo consultar la contraseña del cliente.", e);
         }
     }
 
@@ -101,7 +101,7 @@ public class CredencialFileDao {
                 throw new IOException("No existe el cliente " + usuario + " en la base de datos.");
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar la contraseña del cliente.", e);
+            throw Db.error("No se pudo guardar la contraseña del cliente.", e);
         }
     }
 }

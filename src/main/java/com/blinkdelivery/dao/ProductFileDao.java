@@ -49,7 +49,7 @@ public class ProductFileDao {
             setCategoria(ps, 7, product.getCategoria());
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo guardar el producto en la base de datos.", e);
+            throw Db.error("No se pudo guardar el producto en la base de datos.", e);
         }
     }
 
@@ -94,7 +94,7 @@ public class ProductFileDao {
             ps.setInt(6, aEntero(product.getId()));
             ps.executeUpdate();
         } catch (SQLException e) {
-            throw new IOException("No se pudo actualizar el producto en la base de datos.", e);
+            throw Db.error("No se pudo actualizar el producto en la base de datos.", e);
         }
     }
 
@@ -119,7 +119,7 @@ public class ProductFileDao {
                 }
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudieron leer los productos de la base de datos.", e);
+            throw Db.error("No se pudieron leer los productos de la base de datos.", e);
         }
         return resultado;
     }

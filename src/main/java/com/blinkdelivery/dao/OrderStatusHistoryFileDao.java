@@ -45,7 +45,7 @@ public class OrderStatusHistoryFileDao {
                 }
             }
         } catch (SQLException e) {
-            throw new IOException("No se pudo consultar el historial del pedido.", e);
+            throw Db.error("No se pudo consultar el historial del pedido.", e);
         }
         return historial;
     }

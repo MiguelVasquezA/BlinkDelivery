@@ -42,4 +42,19 @@ public final class Db {
         }
         return valor.trim();
     }
+
+    /**
+     * Convierte un fallo de PostgreSQL en una {@link java.io.IOException} que incluye el
+     * SQLState y el mensaje original, y lo escribe en {@code System.err} para los logs.
+     *
+     * @param contexto descripción de la operación que falló
+     * @param e        excepción original de JDBC
+     * @return excepción lista para lanzar
+     */
+    static java.io.IOException error(String contexto, SQLException e) {
+        String detalle = contexto + " [SQLState " + e.getSQLState() + "]: " + e.getMessage();
+        System.err.println("BD ERROR: " + detalle);
+        e.printStackTrace(System.err);
+        return new java.io.IOException(detalle, e);
+    }
 }
