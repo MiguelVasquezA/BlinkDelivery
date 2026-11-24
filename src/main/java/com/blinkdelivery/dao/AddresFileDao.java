@@ -8,7 +8,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DAO de direcciones de entrega sobre PostgreSQL (tabla {@code direccion}).
@@ -47,24 +49,14 @@ public class AddresFileDao {
      * @throws IOException si falla la base de datos
      */
     public List<Address> listarPorCliente(String idCliente) throws IOException {
-        List<Address> direcciones = new ArrayList<>();
         if (!Ids.esEntero(idCliente)) {
-            return direcciones;
+            return new ArrayList<>();
         }
-        try (Connection c = Db.conectar();
-             PreparedStatement ps = c.prepareStatement(
-                     "SELECT id_direccion, alias, direccion_texto, barrio, ciudad, referencia "
-                             + "FROM direccion WHERE id_cliente = ? ORDER BY es_principal DESC, id_direccion")) {
-            ps.setInt(1, Ids.entero(idCliente));
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    direcciones.add(mapear(rs));
-                }
-            }
+        try (Connection c = Db.conectar()) {
+            return listarPorCliente(c, Ids.entero(idCliente));
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer las direcciones de la base de datos.", e);
         }
-        return direcciones;
     }
 
     /**
@@ -108,6 +100,41 @@ public class AddresFileDao {
     }
 
     // ------------------------------------------------------------ auxiliares
+
+    /**
+     * Direcciones de un cliente usando una conexión ya abierta (sin abrir otra).
+     */
+    static List<Address> listarPorCliente(Connection c, int idCliente) throws SQLException {
+        List<Address> direcciones = new ArrayList<>();
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT id_direccion, alias, direccion_texto, barrio, ciudad, referencia "
+                        + "FROM direccion WHERE id_cliente = ? ORDER BY es_principal DESC, id_direccion")) {
+            ps.setInt(1, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    direcciones.add(mapear(rs));
+                }
+            }
+        }
+        return direcciones;
+    }
+
+    /**
+     * Todas las direcciones de todos los clientes en una sola consulta, agrupadas por cliente.
+     * Evita una consulta por cliente al listar.
+     */
+    static Map<Integer, List<Address>> listarTodasAgrupadas(Connection c) throws SQLException {
+        Map<Integer, List<Address>> porCliente = new HashMap<>();
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT id_cliente, id_direccion, alias, direccion_texto, barrio, ciudad, referencia "
+                        + "FROM direccion ORDER BY id_cliente, es_principal DESC, id_direccion");
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                porCliente.computeIfAbsent(rs.getInt("id_cliente"), k -> new ArrayList<>()).add(mapear(rs));
+            }
+        }
+        return porCliente;
+    }
 
     /**
      * Inserta una dirección dentro de una transacción ya abierta y devuelve su id.

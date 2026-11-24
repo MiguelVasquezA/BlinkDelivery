@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 /**
  * Servidor HTTP de BlinkDelivery (sin frameworks, sobre {@code com.sun.net.httpserver}).
@@ -24,6 +25,7 @@ import java.util.Map;
 public final class ApiServer {
 
     private static final int PUERTO_DEFECTO = 8080;
+    private static final int HILOS = 16;
 
     private ApiServer() {
     }
@@ -34,8 +36,9 @@ public final class ApiServer {
 
         HttpServer servidor = HttpServer.create(new InetSocketAddress(puerto), 0);
         servidor.createContext("/", intercambio -> atender(intercambio, rutas));
-        // Un solo hilo: los DAO leen y reescriben archivos completos sin sincronización.
-        servidor.setExecutor(null);
+        // Varios hilos para atender visitantes simultáneos. Cada consulta toma una conexión del
+        // pool de Hikari (máximo 10), así que los hilos extra esperan su turno en vez de saturar la base.
+        servidor.setExecutor(Executors.newFixedThreadPool(HILOS));
         servidor.start();
 
         System.out.println("BlinkDelivery API escuchando en el puerto " + puerto);
@@ -54,10 +57,40 @@ public final class ApiServer {
         }
     }
 
-    private static void atender(HttpExchange intercambio, ApiRoutes rutas) throws IOException {
+    /**
+     * Punto de entrada de cada petición. Un corte del cliente (navegador cerrado, health check
+     * que desconecta) no es un error del servidor: se registra en una línea.
+     */
+    private static void atender(HttpExchange intercambio, ApiRoutes rutas) {
+        try {
+            procesar(intercambio, rutas);
+        } catch (IOException e) {
+            if (esCortePorCliente(e)) {
+                System.out.println("Cliente desconectado antes de recibir la respuesta: " + e.getMessage());
+            } else {
+                System.err.println("Error al enviar la respuesta: " + e);
+            }
+        }
+    }
+
+    /** {@code Broken pipe} o {@code stream closed}: el cliente se fue mientras escribíamos. */
+    private static boolean esCortePorCliente(IOException e) {
+        String mensaje = e.getMessage();
+        return mensaje != null && (mensaje.contains("Broken pipe") || mensaje.contains("stream closed")
+                || mensaje.contains("Connection reset"));
+    }
+
+    private static void procesar(HttpExchange intercambio, ApiRoutes rutas) throws IOException {
         try {
             agregarCors(intercambio);
             String metodo = intercambio.getRequestMethod().toUpperCase(Locale.ROOT);
+
+            // HEAD (health checks y monitores de uptime): mismos encabezados, sin cuerpo.
+            if (metodo.equals("HEAD")) {
+                intercambio.sendResponseHeaders(200, -1);
+                intercambio.close();
+                return;
+            }
 
             // Preflight de CORS: el navegador lo envía antes de PUT, DELETE o POST con JSON.
             if (metodo.equals("OPTIONS")) {
