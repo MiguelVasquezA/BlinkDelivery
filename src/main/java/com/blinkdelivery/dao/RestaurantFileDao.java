@@ -55,7 +55,7 @@ public class RestaurantFileDao {
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO restaurante (id_restaurante, nombre, telefono, direccion_texto, ciudad, "
                             + "estado, hora_apertura, hora_cierre, fecha_registro) "
-                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE) RETURNING id_restaurante")) {
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_DATE)")) {
                 ps.setInt(1, aEntero(restaurant.getId()));
                 ps.setString(2, restaurant.getNombre());
                 ps.setString(3, restaurant.getTelefono());
@@ -64,9 +64,7 @@ public class RestaurantFileDao {
                 ps.setString(6, estadoTexto(restaurant.isOpen()));
                 ps.setObject(7, restaurant.getHoraApertura(), Types.TIME);
                 ps.setObject(8, restaurant.getHoraCierre(), Types.TIME);
-                try (ResultSet rs = ps.executeQuery()) {
-                    rs.next();
-                }
+                ps.executeUpdate();
             }
             vincularTipo(c, restaurant.getId(), restaurant.getTipoCocina());
             c.commit();
