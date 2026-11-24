@@ -66,3 +66,41 @@ El archivo de respaldo contiene los mismos datos que la base, incluyendo datos p
 - Solo los integrantes del equipo tienen acceso a la carpeta de respaldos y a la copia externa.
 - Las contraseñas de conexión a PostgreSQL no se escriben en este documento ni en el código.
 - Los datos del repositorio son de prueba (`seeds/`), no datos reales de personas.
+
+## 9. Ejecución del respaldo
+
+Se realizó un respaldo completo de la base `blinkdelivery` desde pgAdmin, con los datos semilla ya cargados.
+
+| Dato | Valor |
+|---|---|
+| Fecha y hora | [23/11/2026, hora en que lo hiciste] |
+| Responsable | Ednilson Contreras |
+| Base respaldada | `blinkdelivery` |
+| Archivo generado | `blinkdelivery_2026-11-23.backup` |
+| Formato | Custom |
+| Tamaño del archivo | [tamaño, míralo en las propiedades del archivo] |
+| Resultado | Exitoso |
+
+### Procedimiento
+
+1. Clic derecho sobre la base `blinkdelivery` y elegir **Backup...**
+2. En **Filename**, se indicó el nombre del archivo y en **Format**, **Custom**.
+3. Se presionó **Backup** y se verificó en **Processes** que terminó con éxito.
+
+### Comando ejecutado por pgAdmin
+
+```text
+Backing up an object on the server 'PostgreSQL 18 (localhost: 5432)' from database 'blinkdelivery'
+Running command:
+C:\Program Files\PostgreSQL\18\pgAdmin 4\runtime\pg_dump.exe --file "C:\\Users\\EDNILS~1\\OneDrive\\DOCUME~1\\BLINKD~2" --host "localhost" --port "5432" --username "postgres" --no-password --format=c --large-objects --verbose
+```
+
+### Evidencias
+
+**Evidencia 1:** configuración del respaldo.
+
+![Configuración del respaldo](evidencias/01_backup_configuracion.png)
+
+**Evidencia 2:** respaldo terminado con éxito.
+
+![Respaldo exitoso](evidencias/02_backup_proceso_exitoso.png)
