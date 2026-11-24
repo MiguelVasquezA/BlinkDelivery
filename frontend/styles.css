@@ -804,7 +804,26 @@ h1, h2, h3 {
   background: var(--superficie-2);
   border: 1px solid var(--borde);
   color: var(--texto-suave);
+  font: inherit;
   font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--acento);
+  color: var(--texto);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.chip.active {
+  background: linear-gradient(135deg, var(--acento), var(--acento-2));
+  border-color: transparent;
+  color: #fff;
+  font-weight: 700;
 }
 
 /* ---------- Insignias ---------- */

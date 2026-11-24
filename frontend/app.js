@@ -91,7 +91,7 @@ const PESTANAS = {
   ],
 };
 
-const estado = { rol: null, perfil: null, pestana: null, filtroRestaurante: "", busqueda: "" };
+const estado = { rol: null, perfil: null, pestana: null, filtroRestaurante: "", busqueda: "", categoriaFiltro: "" };
 const cache = new Map();
 let nombresRestaurantes = new Map();
 let tokenRender = 0;
@@ -119,12 +119,18 @@ function moneda(valor) {
   return COP.format(Number(valor) || 0);
 }
 
+/**
+ * Formatea una fecha/hora del backend. Los pedidos se guardan en hora de Bogotá SIN zona
+ * (formato LocalDateTime: 2026-11-23T14:05:09). Colombia no tiene horario de verano, así que
+ * se fija el desfase -05:00 para interpretarla igual en cualquier navegador, y se muestra en America/Bogota.
+ */
 function fecha(texto) {
   if (!texto) return "—";
-  const d = new Date(texto);
+  const sinZona = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(texto);
+  const d = new Date(sinZona ? `${texto.replace(/(\.\d{3})\d+$/, "$1")}-05:00` : texto);
   return Number.isNaN(d.getTime())
     ? esc(texto)
-    : d.toLocaleString("es-CO", { dateStyle: "medium", timeStyle: "short" });
+    : d.toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "medium", timeStyle: "short" });
 }
 
 function estrellas(valor) {
@@ -496,7 +502,7 @@ function leerFormulario(form, campos) {
 
 // ---------------------------------------------------------------- buscador y filtros (cliente)
 
-let datosExplorar = { restaurantes: [] };
+let datosExplorar = { restaurantes: [], categorias: [], categoriasPorRestaurante: new Map() };
 let datosMenu = { productos: [], restaurantes: [] };
 
 /** Texto en minúsculas y sin tildes, para comparar búsquedas. */
@@ -548,7 +554,8 @@ function sinResultados(hayDatos, vacioHtml) {
 function resultadosExplorarHtml() {
   const q = normalizar(estado.busqueda);
   const visibles = datosExplorar.restaurantes.filter((r) =>
-    !q || normalizar(`${r.nombre} ${r.tipoCocina}`).includes(q));
+    (!estado.categoriaFiltro || datosExplorar.categoriasPorRestaurante.get(r.id)?.has(estado.categoriaFiltro)) &&
+    (!q || normalizar(`${r.nombre} ${r.tipoCocina}`).includes(q)));
   if (!visibles.length) {
     return sinResultados(datosExplorar.restaurantes.length > 0,
       vacio("🏪", "Aún no hay restaurantes", "Cuando se registren restaurantes aparecerán aquí."));
@@ -613,13 +620,31 @@ function pintarResultados(vista) {
   if (limpiar) limpiar.hidden = !estado.busqueda;
 }
 
+/** Botones de categoría: «Todas» y una por categoría; la activa lleva la clase `active`. */
+function chipsCategoriasHtml() {
+  const opciones = [{ id: "", nombre: "Todas" }, ...datosExplorar.categorias];
+  return opciones.map((c) => {
+    const activa = c.id === estado.categoriaFiltro;
+    return `<button type="button" class="chip${activa ? " active" : ""}" data-accion="filtrar-categoria"
+              data-id="${esc(c.id)}" aria-pressed="${activa}">${esc(c.nombre)}</button>`;
+  }).join("");
+}
+
+/** Repinta los chips y los resultados sin recargar datos ni perder el texto del buscador. */
+function pintarFiltrosExplorar() {
+  const chips = $("chips-categorias");
+  if (chips) chips.innerHTML = chipsCategoriasHtml();
+  pintarResultados("explorar");
+}
+
 async function vistaExplorar() {
   const [restaurantes, categorias] = await Promise.all([obtenerRestaurantes(), api("GET", "/categories")]);
-  datosExplorar = { restaurantes };
+  // Relación restaurante-categoría: una petición por restaurante, en paralelo.
+  const porRestaurante = await Promise.all(restaurantes.map((r) => api("GET", `/restaurants/${enc(r.id)}/categories`)));
+  const categoriasPorRestaurante = new Map(restaurantes.map((r, i) => [r.id, new Set(porRestaurante[i].map((c) => c.id))]));
+  datosExplorar = { restaurantes, categorias, categoriasPorRestaurante };
   return cabecera("Explorar restaurantes", "Descubre dónde pedir y revisa sus calificaciones.") +
-    (categorias.length
-      ? `<div class="chips">${categorias.map((c) => `<span class="chip">${esc(c.nombre)}</span>`).join("")}</div>`
-      : "") +
+    (categorias.length ? `<div class="chips" id="chips-categorias">${chipsCategoriasHtml()}</div>` : "") +
     barraFiltros({ vista: "explorar", placeholder: "Buscar restaurante o tipo de cocina…" }) +
     `<div id="resultados-explorar">${resultadosExplorarHtml()}</div>`;
 }
@@ -1375,7 +1400,13 @@ const ACCIONES = {
   "limpiar-filtros": () => {
     estado.busqueda = "";
     estado.filtroRestaurante = "";
+    estado.categoriaFiltro = "";
     renderVista();
+  },
+  // Pulsar la categoría activa la quita (vuelve a «Todas»).
+  "filtrar-categoria": (d) => {
+    estado.categoriaFiltro = d.id === estado.categoriaFiltro ? "" : d.id;
+    pintarFiltrosExplorar();
   },
   reintentar: () => renderVista(),
   "cantidad-tarjeta": (d) => {

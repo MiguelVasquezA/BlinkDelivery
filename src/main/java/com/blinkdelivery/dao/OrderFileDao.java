@@ -8,6 +8,7 @@ import com.blinkdelivery.modelo.OrderStatus;
 import com.blinkdelivery.modelo.PercentageCommissionPolicy;
 import com.blinkdelivery.modelo.Product;
 import com.blinkdelivery.modelo.Restaurant;
+import com.blinkdelivery.modelo.ZonaHoraria;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -140,7 +141,7 @@ public class OrderFileDao {
         items.add(new OrderItem(producto, cantidad, precioUnitario));
         // El formato anterior no guardaba la fecha; se usa la fecha de migración.
         return new Order(p[0], cliente, restaurante, cliente.getDireccionPrincipal(), items,
-                OrderStatus.desdeTexto(p[6]), LocalDateTime.now(), buscarDomiciliario(p[7]),
+                OrderStatus.desdeTexto(p[6]), ZonaHoraria.ahora(), buscarDomiciliario(p[7]),
                 new PercentageCommissionPolicy());
     }
 
