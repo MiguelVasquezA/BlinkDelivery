@@ -1,7 +1,8 @@
 package com.blinkdelivery.dao;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
 /**
@@ -20,19 +21,53 @@ public final class Db {
     static final String VAR_USUARIO = "DATABASE_USER";
     static final String VAR_CLAVE = "DATABASE_PASSWORD";
 
+    /** Pool compartido por toda la aplicación; se crea la primera vez que se necesita. */
+    private static volatile HikariDataSource pool;
+
     private Db() {
     }
 
     /**
-     * Abre una conexión nueva. Quien la use debe cerrarla (try-with-resources).
+     * Toma una conexión del pool. Quien la use debe cerrarla (try-with-resources): al cerrarla
+     * vuelve al pool en lugar de cerrarse.
      *
-     * @return conexión JDBC abierta
-     * @throws SQLException             si no se puede conectar
-     * @throws IllegalStateException    si falta alguna variable de entorno
+     * @return conexión JDBC del pool
+     * @throws SQLException          si no hay conexión disponible en {@code connectionTimeout}
+     * @throws IllegalStateException si falta alguna variable de entorno
      */
     public static Connection conectar() throws SQLException {
-        return DriverManager.getConnection(
-                requerida(VAR_URL), requerida(VAR_USUARIO), requerida(VAR_CLAVE));
+        return origen().getConnection();
+    }
+
+    private static HikariDataSource origen() {
+        HikariDataSource actual = pool;
+        if (actual == null) {
+            synchronized (Db.class) {
+                if (pool == null) {
+                    pool = crearPool();
+                }
+                actual = pool;
+            }
+        }
+        return actual;
+    }
+
+    /** Configuración pensada para el Transaction Pooler de Supabase (compatible con PgBouncer). */
+    private static HikariDataSource crearPool() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(requerida(VAR_URL));
+        config.setUsername(requerida(VAR_USUARIO));
+        config.setPassword(requerida(VAR_CLAVE));
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(2);
+        config.setConnectionTimeout(10_000);
+        config.setIdleTimeout(300_000);
+        config.setMaxLifetime(900_000);
+        config.setKeepaliveTime(60_000);
+        // Obligatorio con PgBouncer en modo transacción: sin sentencias preparadas con nombre.
+        config.addDataSourceProperty("prepareThreshold", "0");
+        config.setPoolName("blinkdelivery");
+        return new HikariDataSource(config);
     }
 
     private static String requerida(String nombre) {

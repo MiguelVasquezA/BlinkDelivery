@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DAO de clientes sobre PostgreSQL (tablas {@code persona} y {@code cliente}).
@@ -69,12 +70,15 @@ public class CustomerFileDao {
      * @throws IOException si falla la base de datos
      */
     public List<Customer> listar() throws IOException {
+        // Dos consultas en total (clientes y direcciones), sin una consulta por cliente.
         List<Customer> clientes = new ArrayList<>();
         try (Connection c = Db.conectar();
              PreparedStatement ps = c.prepareStatement(SELECCION + " ORDER BY p.id_persona");
              ResultSet rs = ps.executeQuery()) {
+            Map<Integer, List<Address>> direcciones = AddresFileDao.listarTodasAgrupadas(c);
             while (rs.next()) {
-                clientes.add(mapear(rs, new AddresFileDao()));
+                int id = rs.getInt("id_persona");
+                clientes.add(mapear(rs, direcciones.getOrDefault(id, List.of())));
             }
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer los clientes de la base de datos.", e);
@@ -95,7 +99,10 @@ public class CustomerFileDao {
              PreparedStatement ps = c.prepareStatement(SELECCION + " WHERE p.id_persona = ?")) {
             ps.setInt(1, Ids.entero(identification));
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? mapear(rs, new AddresFileDao()) : null;
+                if (!rs.next()) {
+                    return null;
+                }
+                return mapear(rs, AddresFileDao.listarPorCliente(c, Ids.entero(identification)));
             }
         } catch (SQLException e) {
             throw Db.error("No se pudo consultar el cliente en la base de datos.", e);
@@ -129,12 +136,11 @@ public class CustomerFileDao {
 
     // ------------------------------------------------------------ auxiliares
 
-    private static Customer mapear(ResultSet rs, AddresFileDao direcciones) throws SQLException, IOException {
+    private static Customer mapear(ResultSet rs, List<Address> lista) throws SQLException {
         String id = String.valueOf(rs.getInt("id_persona"));
         String nombre = Personas.unir(rs.getString("nombre"), rs.getString("apellido"));
         String telefono = rs.getString("telefono");
         String correo = Personas.correoPorDefecto(rs.getString("correo"), id, null);
-        List<Address> lista = direcciones.listarPorCliente(id);
         if (lista.isEmpty()) {
             // Cliente sin dirección en la base: se usa un marcador para no romper el modelo.
             lista = List.of(new Address(id + "-SIN-DIR", "Principal", "Sin dirección", null,

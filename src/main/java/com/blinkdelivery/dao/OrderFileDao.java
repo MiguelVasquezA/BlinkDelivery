@@ -20,7 +20,10 @@ import java.sql.Types;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 
 /**
  * DAO de pedidos sobre PostgreSQL (tablas {@code pedido} y {@code detalle_pedido}).
@@ -33,9 +36,13 @@ import java.util.List;
  *       {@code detalle_pedido}, con la política de comisión del modelo.</li>
  *   <li>{@code fecha_pedido} es TIMESTAMPTZ (migración 009); se lee y escribe en hora de Bogotá.</li>
  * </ul>
+ * <p>
+ * Al listar no se hace una consulta por pedido: se cargan pedidos y líneas en dos consultas
+ * y los catálogos (clientes, restaurantes, productos, domiciliarios) en una consulta cada uno.
+ * </p>
  *
  * @author BlinkDelivery
- * @version 2.0
+ * @version 3.0
  */
 public class OrderFileDao {
     private static final String SELECCION = """
@@ -47,7 +54,15 @@ public class OrderFileDao {
     private final RestaurantFileDao restaurantDao = new RestaurantFileDao();
     private final ProductFileDao productDao = new ProductFileDao();
     private final DriverFileDao driverDao = new DriverFileDao();
-    private final AddresFileDao addressDao = new AddresFileDao();
+
+    /** Fila de {@code pedido} tal como sale de la base. */
+    private record Fila(int idPedido, int idCliente, int idRestaurante, Integer idDomiciliario,
+                        int idDireccion, String estado, OffsetDateTime fecha) {
+    }
+
+    /** Línea de {@code detalle_pedido} tal como sale de la base. */
+    private record Linea(int idPedido, int idProducto, int cantidad, BigDecimal precioUnitario) {
+    }
 
     /**
      * Registra un pedido nuevo con sus productos.
@@ -123,7 +138,7 @@ public class OrderFileDao {
      * @throws IOException si falla la base de datos
      */
     public List<Order> listar() throws IOException {
-        return consultar(SELECCION + " ORDER BY id_pedido", null);
+        return consultar("", null);
     }
 
     /**
@@ -135,79 +150,113 @@ public class OrderFileDao {
         if (!Ids.esEntero(id.replaceFirst("(?i)^PED-", ""))) {
             return null;
         }
-        List<Order> r = consultar(SELECCION + " WHERE id_pedido = ?",
-                ps -> ps.setInt(1, Ids.pedido(id)));
+        List<Order> r = consultar(" WHERE id_pedido = ?", Ids.pedido(id));
         return r.isEmpty() ? null : r.get(0);
     }
 
     // ------------------------------------------------------------ auxiliares
 
-    /** Parámetros opcionales de una consulta. */
-    @FunctionalInterface
-    private interface Parametros {
-        void asignar(PreparedStatement ps) throws SQLException;
-    }
-
-    private List<Order> consultar(String sql, Parametros parametros) throws IOException {
-        List<Order> pedidos = new ArrayList<>();
-        try (Connection c = Db.conectar();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            if (parametros != null) {
-                parametros.asignar(ps);
+    /**
+     * Carga pedidos (y sus líneas) con dos consultas y arma los modelos con los catálogos
+     * cargados en lote. Con {@code idUnico} solo trae ese pedido.
+     */
+    private List<Order> consultar(String condicion, Integer idUnico) throws IOException {
+        List<Fila> filas = new ArrayList<>();
+        List<Linea> lineas = new ArrayList<>();
+        try (Connection c = Db.conectar()) {
+            try (PreparedStatement ps = c.prepareStatement(SELECCION + condicion + " ORDER BY id_pedido")) {
+                if (idUnico != null) {
+                    ps.setInt(1, idUnico);
+                }
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        int dom = rs.getInt("id_domiciliario");
+                        filas.add(new Fila(rs.getInt("id_pedido"), rs.getInt("id_cliente"),
+                                rs.getInt("id_restaurante"), rs.wasNull() ? null : dom,
+                                rs.getInt("id_direccion"), rs.getString("estado"),
+                                rs.getObject("fecha_pedido", OffsetDateTime.class)));
+                    }
+                }
             }
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    Order o = construir(c, rs);
-                    if (o != null) {
-                        pedidos.add(o);
+            if (filas.isEmpty()) {
+                return new ArrayList<>();
+            }
+            String sqlLineas = "SELECT id_pedido, id_producto, cantidad, precio_unitario FROM detalle_pedido"
+                    + (idUnico == null ? "" : " WHERE id_pedido = ?") + " ORDER BY id_pedido, id_detalle_pedido";
+            try (PreparedStatement ps = c.prepareStatement(sqlLineas)) {
+                if (idUnico != null) {
+                    ps.setInt(1, idUnico);
+                }
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        lineas.add(new Linea(rs.getInt("id_pedido"), rs.getInt("id_producto"),
+                                rs.getInt("cantidad"), rs.getBigDecimal("precio_unitario")));
                     }
                 }
             }
         } catch (SQLException e) {
             throw Db.error("No se pudieron leer los pedidos de la base de datos.", e);
         }
+
+        // Catálogos: cada listar() toma su propia conexión, después de cerrar la anterior.
+        Map<String, Customer> clientes = porId(customerDao.listar(), Customer::getIdentification);
+        Map<String, Restaurant> restaurantes = porId(restaurantDao.listar(), Restaurant::getId);
+        Map<String, Product> productos = porId(productDao.listar(), Product::getId);
+        Map<String, DeliveryDriver> domiciliarios = porId(driverDao.listar(), DeliveryDriver::getIdentification);
+
+        Map<Integer, List<Linea>> lineasPorPedido = new HashMap<>();
+        for (Linea l : lineas) {
+            lineasPorPedido.computeIfAbsent(l.idPedido(), k -> new ArrayList<>()).add(l);
+        }
+
+        List<Order> pedidos = new ArrayList<>();
+        for (Fila f : filas) {
+            Order o = construir(f, lineasPorPedido.getOrDefault(f.idPedido(), List.of()),
+                    clientes, restaurantes, productos, domiciliarios);
+            if (o != null) {
+                pedidos.add(o);
+            }
+        }
         return pedidos;
     }
 
-    private Order construir(Connection c, ResultSet rs) throws SQLException, IOException {
-        String id = Ids.pedido(rs.getInt("id_pedido"));
-        Customer cliente = customerDao.buscarPorId(String.valueOf(rs.getInt("id_cliente")));
-        Restaurant restaurante = restaurantDao.buscarPorId(String.valueOf(rs.getInt("id_restaurante")));
+    private static Order construir(Fila f, List<Linea> lineas, Map<String, Customer> clientes,
+                                   Map<String, Restaurant> restaurantes, Map<String, Product> productos,
+                                   Map<String, DeliveryDriver> domiciliarios) {
+        Customer cliente = clientes.get(String.valueOf(f.idCliente()));
+        Restaurant restaurante = restaurantes.get(String.valueOf(f.idRestaurante()));
         if (cliente == null || restaurante == null) {
             return null;
         }
-
         List<OrderItem> items = new ArrayList<>();
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT id_producto, cantidad, precio_unitario FROM detalle_pedido WHERE id_pedido = ? "
-                        + "ORDER BY id_detalle_pedido")) {
-            ps.setInt(1, rs.getInt("id_pedido"));
-            try (ResultSet det = ps.executeQuery()) {
-                while (det.next()) {
-                    Product producto = productDao.buscarPorId(String.valueOf(det.getInt("id_producto")));
-                    if (producto == null) {
-                        return null;
-                    }
-                    items.add(new OrderItem(producto, det.getInt("cantidad"), det.getBigDecimal("precio_unitario").doubleValue()));
-                }
+        for (Linea l : lineas) {
+            Product producto = productos.get(String.valueOf(l.idProducto()));
+            if (producto == null) {
+                return null;
             }
+            items.add(new OrderItem(producto, l.cantidad(), l.precioUnitario().doubleValue()));
         }
         if (items.isEmpty()) {
             return null;
         }
-
-        Address entrega = direccionDe(cliente, rs.getInt("id_direccion"));
-        int idDomiciliario = rs.getInt("id_domiciliario");
-        DeliveryDriver domiciliario = rs.wasNull() ? null
-                : driverDao.buscarPorId(String.valueOf(idDomiciliario));
-
-        return new Order(id, cliente, restaurante, entrega, items,
-                OrderStatus.desdeTexto(rs.getString("estado")), aFechaLocal(rs.getObject("fecha_pedido", OffsetDateTime.class)),
+        DeliveryDriver domiciliario = f.idDomiciliario() == null
+                ? null : domiciliarios.get(String.valueOf(f.idDomiciliario()));
+        return new Order(Ids.pedido(f.idPedido()), cliente, restaurante,
+                direccionDe(cliente, f.idDireccion()), items,
+                OrderStatus.desdeTexto(f.estado()), aFechaLocal(f.fecha()),
                 domiciliario, new PercentageCommissionPolicy());
     }
 
+    private static <T> Map<String, T> porId(List<T> lista, Function<T, String> clave) {
+        Map<String, T> mapa = new HashMap<>();
+        for (T t : lista) {
+            mapa.put(clave.apply(t), t);
+        }
+        return mapa;
+    }
+
     /** Dirección de entrega guardada; si ya no existe, la principal del cliente. */
-    private Address direccionDe(Customer cliente, int idDireccion) throws IOException {
+    private static Address direccionDe(Customer cliente, int idDireccion) {
         for (Address a : cliente.getDirecciones()) {
             if (a.getId().equals(String.valueOf(idDireccion))) {
                 return a;
