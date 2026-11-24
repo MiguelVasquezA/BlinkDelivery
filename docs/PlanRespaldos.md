@@ -195,3 +195,17 @@ La duración queda muy por debajo de la meta de recuperación (RTO) de 30 minuto
 **Evidencia 6:** restauración terminada con éxito.
 
 ![Restauración exitosa](evidencias/06_restore_exitoso.png)
+
+## 12. Verificación de la restauración
+
+Se ejecutaron en la base `blinkdelivery_restore` las mismas consultas de la sección 10 y se compararon con los resultados de la base original.
+
+**Evidencia 7:** conteos de las tablas en la base restaurada.
+
+![Conteos en la base restaurada](evidencias/07_conteos_restore.png)
+
+**Evidencia 8:** resultado de C07 en la base restaurada.
+
+![C07 en la base restaurada](evidencias/08_c07_restore.png)
+
+**Conclusión:** las 11 tablas tienen el mismo número de filas en ambas bases y el total vendido en pedidos entregados (C07) es idéntico. Esto demuestra que el respaldo se restauró completo y que su contenido es el mismo que el de la base original.
